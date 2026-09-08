@@ -114,10 +114,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       await authService.logout();
+    } catch {
+      /* token may already be invalid server-side */
     } finally {
       authService.clearToken();
       setUser(null);
       setIsLoading(false);
+      await ensureGuestSession();
     }
   };
 

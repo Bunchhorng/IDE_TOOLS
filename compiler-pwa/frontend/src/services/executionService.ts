@@ -22,7 +22,7 @@ export const executionService = {
     return response.data;
   },
 
-  async pollStatus(id: number, maxAttempts = 30): Promise<Execution> {
+  async pollStatus(id: number, maxAttempts = 200): Promise<Execution> {
     for (let i = 0; i < maxAttempts; i++) {
       const response = await this.getById(id);
       const execution = response.data;

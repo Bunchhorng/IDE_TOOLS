@@ -9,6 +9,7 @@ import { Button, buttonClass } from './ui/Button';
 import { Dropdown, type MenuItem } from './ui/Dropdown';
 import { Icon, type IconName } from './ui/Icon';
 import { Toggle } from './ui/Toggle';
+import { InstallPWAButton } from './InstallPWAButton';
 import { cn } from '../lib/cn';
 
 export function TopNav() {
@@ -197,40 +198,50 @@ export function TopNav() {
                   <Link to="/register" className={buttonClass('primary', 'md')} onClick={() => setDrawerOpen(false)}>
                     Get started
                   </Link>
-                  {isGuest && (
-                    <p className="mt-1 px-2 text-[11px] text-faint">
-                      Create an account to save your projects and sync them across devices.
-                    </p>
-                  )}
                 </div>
               ) : (
-                <nav aria-label="Main navigation" className="flex flex-col gap-0.5">
-                  {drawerLinks.map((item) => {
-                    const active = pathname.startsWith(item.path);
-                    return (
-                      <button
-                        key={item.key}
-                        onClick={() => go(item.path)}
-                        className={cn(
-                          'flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors',
-                          active ? 'bg-primary/10 text-ink' : 'text-mute hover:bg-raised hover:text-ink',
-                        )}
-                      >
-                        <Icon
-                          name={item.icon}
-                          size={18}
-                          className={cn('shrink-0', active ? 'text-primary' : 'text-faint')}
-                        />
-                        {item.label}
-                        {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />}
-                      </button>
-                    );
-                  })}
-                </nav>
+                <div className="flex flex-col gap-3">
+                  {isGuest && (
+                    <Link
+                      to="/register"
+                      onClick={() => setDrawerOpen(false)}
+                      className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2.5 text-xs leading-relaxed text-ink"
+                    >
+                      <span className="font-semibold text-primary">Save your projects</span>
+                      <span className="mt-0.5 block text-faint">
+                        Create an account to save and sync your work across devices.
+                      </span>
+                    </Link>
+                  )}
+                  <nav aria-label="Main navigation" className="flex flex-col gap-0.5">
+                    {drawerLinks.map((item) => {
+                      const active = pathname.startsWith(item.path);
+                      return (
+                        <button
+                          key={item.key}
+                          onClick={() => go(item.path)}
+                          className={cn(
+                            'flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors',
+                            active ? 'bg-primary/10 text-ink' : 'text-mute hover:bg-raised hover:text-ink',
+                          )}
+                        >
+                          <Icon
+                            name={item.icon}
+                            size={18}
+                            className={cn('shrink-0', active ? 'text-primary' : 'text-faint')}
+                          />
+                          {item.label}
+                          {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />}
+                        </button>
+                      );
+                    })}
+                  </nav>
+                </div>
               )}
 
               <div className="mt-auto">
                 <div className="my-3 h-px bg-edge" />
+                <InstallPWAButton variant="ghost" size="md" className="w-full justify-start px-3" />
                 <Toggle
                   checked={theme === 'dark'}
                   onChange={toggle}

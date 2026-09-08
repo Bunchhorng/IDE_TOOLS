@@ -3,6 +3,7 @@ import { buttonClass } from '../../components/ui/Button';
 import { Icon, type IconName } from '../../components/ui/Icon';
 import { LanguageIcon } from '../../components/LanguageIcon';
 import { Logo } from '../../components/Logo';
+import { InstallPWAButton } from '../../components/InstallPWAButton';
 
 const FEATURES: { icon: IconName; title: string; body: string }[] = [
   {
@@ -102,6 +103,7 @@ export default function Home() {
                 <Link to="/login" className={buttonClass('secondary', 'lg')}>
                   Sign in
                 </Link>
+                <InstallPWAButton variant="outline" size="lg" />
               </div>
               <div className="mt-8 flex items-center gap-5">
                 <div>

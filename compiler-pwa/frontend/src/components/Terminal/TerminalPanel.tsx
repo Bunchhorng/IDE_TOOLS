@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { cn } from '../../lib/cn';
 import { Tabs } from '../ui/Tabs';
 import { Button } from '../ui/Button';
 import { StatusBadge } from '../ui/Badge';
@@ -68,6 +67,31 @@ export function TerminalPanel({ execution, isRunning, stdin, onStdinChange, hasE
             spellCheck={false}
             className="h-full w-full resize-none bg-editor px-4 py-3 font-mono text-[13px] leading-relaxed text-ink placeholder:text-faint focus:outline-none"
           />
+        ) : tab === 'errors' ? (
+          <div className="h-full overflow-auto bg-editor px-4 py-3 font-mono text-[13px] leading-relaxed scrollbar-thin">
+            {isRunning && (
+              <div className="flex items-center gap-2 text-info">
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-info border-t-transparent" />
+                <span>Compiling &amp; running…</span>
+              </div>
+            )}
+
+            {!stderr && !isRunning && (
+              <p className="text-success">
+                <span className="flex items-center gap-1.5">
+                  <Icon name="checkCircle" size={14} />
+                  No errors. Compilation and execution completed successfully.
+                </span>
+              </p>
+            )}
+
+            {stderr && (
+              <div className="flex items-start gap-2">
+                <Icon name="alertTriangle" size={14} className="mt-0.5 shrink-0 text-error" />
+                <pre className="whitespace-pre-wrap text-error/90">{stderr}</pre>
+              </div>
+            )}
+          </div>
         ) : (
           <div className="h-full overflow-auto bg-editor px-4 py-3 font-mono text-[13px] leading-relaxed scrollbar-thin">
             {isRunning && (
@@ -77,22 +101,12 @@ export function TerminalPanel({ execution, isRunning, stdin, onStdinChange, hasE
               </div>
             )}
 
-            {outputEmpty && !isRunning && (
+            {outputEmpty && (
               <p className="text-faint">Press <kbd className="rounded border border-edge bg-raised px-1.5 py-0.5 text-[11px] text-mute">Run</kbd> to execute your code. Results appear here.</p>
             )}
 
             {stdout && (
               <pre className="whitespace-pre-wrap text-ink">{stdout}</pre>
-            )}
-
-            {stderr && (
-              <div className={cn('mt-2', tab === 'errors' ? 'block' : 'block')}>
-                <div className="mb-1 flex items-center gap-1.5 text-error">
-                  <Icon name="alertTriangle" size={13} />
-                  <span className="text-[11px] font-semibold uppercase tracking-wide">stderr</span>
-                </div>
-                <pre className="whitespace-pre-wrap text-error/90">{stderr}</pre>
-              </div>
             )}
 
             {execution && !isRunning && (execution.execution_time !== null || execution.memory_usage !== null || execution.exit_code !== null) && (

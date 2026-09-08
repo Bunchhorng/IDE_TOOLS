@@ -37,7 +37,7 @@ class ExecutionController extends Controller
             ], 429);
         }
 
-        // Verify ownership when project/file provided
+        // Verify ownership of the referenced project
         if ($request->project_id) {
             $project = Project::where('id', $request->project_id)->first();
             if (! $project || $project->user_id !== $user->id) {
@@ -47,16 +47,25 @@ class ExecutionController extends Controller
                     'data' => null,
                 ], 403);
             }
+        }
 
-            if ($request->file_id) {
-                $file = File::where('id', $request->file_id)->where('project_id', $project->id)->first();
-                if (! $file) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'File not found in this project.',
-                        'data' => null,
-                    ], 404);
-                }
+        // Verify the referenced file belongs to the current user and (when both given) the project
+        if ($request->file_id) {
+            $file = File::where('id', $request->file_id)->first();
+            if (! $file || $file->project->user_id !== $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File not found or you do not have permission.',
+                    'data' => null,
+                ], 403);
+            }
+
+            if ($request->project_id && $file->project_id !== $request->project_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File not found in this project.',
+                    'data' => null,
+                ], 404);
             }
         }
 
