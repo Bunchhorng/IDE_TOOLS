@@ -14,6 +14,9 @@ class UpdateFileRequest extends FormRequest
 
     public function rules(): array
     {
+        $file = $this->route('file');
+        $projectId = $file ? $file->project_id : null;
+
         return [
             'filename' => [
                 'sometimes',
@@ -21,7 +24,9 @@ class UpdateFileRequest extends FormRequest
                 'string',
                 'max:255',
                 'regex:/^[a-zA-Z0-9][a-zA-Z0-9_.\-]*$/',
-                Rule::unique('files', 'filename')->where('project_id', $this->file()->project_id)->ignore($this->route('file')),
+                Rule::unique('files', 'filename')
+                    ->where('project_id', $projectId)
+                    ->ignore($file?->id),
             ],
             'language' => ['sometimes', 'required', 'string', 'max:20', Rule::exists('languages', 'slug')],
             'content' => ['sometimes', 'nullable', 'string', 'max:5242880'],

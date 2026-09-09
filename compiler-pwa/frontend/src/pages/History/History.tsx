@@ -13,6 +13,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { LanguageIcon, type LangGlyph } from '../../components/LanguageIcon';
 import { formatExecutionTime, timeAgo, formatMemory } from '../../lib/format';
 import { useToast } from '../../context/ToastContext';
+import { useI18n } from '../../i18n';
 import type { Execution, ExecutionStatus, Language } from '../../types';
 
 function glyphFor(status: string): LangGlyph {
@@ -21,6 +22,7 @@ function glyphFor(status: string): LangGlyph {
 
 export default function History() {
   const toast = useToast();
+  const { t } = useI18n();
 
   const [executions, setExecutions] = useState<Execution[]>([]);
   const [languages, setLanguages] = useState<Language[]>([]);
@@ -37,14 +39,21 @@ export default function History() {
     setLoading(true);
     try {
       const response = await executionService.getAll(page);
-      setExecutions(response.data.data);
+      setExecutions((prev) =>
+        page > 1
+          ? [
+              ...prev.filter((e) => !response.data.data.some((n) => n.id === e.id)),
+              ...response.data.data,
+            ]
+          : response.data.data,
+      );
       setTotal(response.data.total);
     } catch {
-      toast.error('Failed to load history');
+      toast.error(t('toast.failed_load_history'));
     } finally {
       setLoading(false);
     }
-  }, [page, toast]);
+  }, [page, toast, t]);
 
   useEffect(() => {
     void load();
@@ -69,10 +78,10 @@ export default function History() {
     try {
       await executionService.delete(deleteTarget.id);
       setExecutions((es) => es.filter((e) => e.id !== deleteTarget.id));
-      setTotal((t) => Math.max(0, t - 1));
-      toast.success('Execution deleted');
+      setTotal((total) => Math.max(0, total - 1));
+      toast.success(t('toast.execution_deleted'));
     } catch {
-      toast.error('Failed to delete execution');
+      toast.error(t('toast.failed_delete_execution'));
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
@@ -83,9 +92,9 @@ export default function History() {
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">Execution history</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-ink">{t('history.heading')}</h1>
           <p className="mt-1 text-sm text-mute">
-            {total} run{total === 1 ? '' : 's'} across all your projects
+            {t('history.subheading', { total })}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -94,12 +103,12 @@ export default function History() {
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as ExecutionStatus | 'all')}
               options={[
-                { value: 'all', label: 'All statuses' },
-                { value: 'success', label: 'Passed' },
-                { value: 'compile_error', label: 'Compile error' },
-                { value: 'runtime_error', label: 'Runtime error' },
-                { value: 'timeout', label: 'Timeout' },
-                { value: 'memory_limit', label: 'Memory limit' },
+                { value: 'all', label: t('history.all_statuses') },
+                { value: 'success', label: t('history.passed') },
+                { value: 'compile_error', label: t('history.compile_error') },
+                { value: 'runtime_error', label: t('history.runtime_error') },
+                { value: 'timeout', label: t('history.timeout') },
+                { value: 'memory_limit', label: t('history.memory_limit') },
               ]}
             />
           </div>
@@ -108,14 +117,14 @@ export default function History() {
               value={languageFilter}
               onChange={(e) => setLanguageFilter(e.target.value)}
               options={[
-                { value: 'all', label: 'All languages' },
+                { value: 'all', label: t('history.all_languages') },
                 ...languages.map((l) => ({ value: l.slug, label: l.name })),
               ]}
             />
           </div>
           <Button variant="secondary" size="md" onClick={() => { setStatusFilter('all'); setLanguageFilter('all'); if (page !== 1) setPage(1); }}>
             <Icon name="refresh" size={14} />
-            Reset
+            {t('history.reset')}
           </Button>
         </div>
       </div>
@@ -128,11 +137,11 @@ export default function History() {
         <Card className="mt-6">
           <EmptyState
             icon="clock"
-            title={executions.length === 0 ? 'No executions yet' : 'No matches'}
+            title={executions.length === 0 ? t('history.no_executions') : t('history.no_matches')}
             message={
               executions.length === 0
-                ? 'Run code from the editor and it will appear here with full output and stats.'
-                : 'Try adjusting your filters.'
+                ? t('history.run_first')
+                : t('history.try_different')
             }
           />
         </Card>
@@ -199,11 +208,22 @@ export default function History() {
 
                 {isOpen && (
                   <div className="border-t border-edge bg-raised/40 px-4 py-4">
+                    {e.stdin && (
+                      <div className="mb-3">
+                        <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute">
+                          <Icon name="keyboard" size={12} />
+                          {t('history.input_label')}
+                        </p>
+                        <pre className="max-h-32 overflow-auto rounded-lg border border-edge bg-editor p-3 font-mono text-[12px] leading-relaxed text-ink">
+                          {e.stdin}
+                        </pre>
+                      </div>
+                    )}
                     <div className="grid gap-3 md:grid-cols-2">
                       <div>
                         <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-success">
                           <Icon name="terminal" size={12} />
-                          Output
+                          {t('history.output_label')}
                         </p>
                         <pre className="max-h-52 overflow-auto rounded-lg border border-edge bg-editor p-3 font-mono text-[12px] leading-relaxed text-ink">
                           {e.stdout || <span className="text-faint">—</span>}
@@ -212,7 +232,7 @@ export default function History() {
                       <div>
                         <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-error">
                           <Icon name="alertTriangle" size={12} />
-                          Errors
+                          {t('history.errors_label')}
                         </p>
                         <pre className="max-h-52 overflow-auto rounded-lg border border-error/30 bg-editor p-3 font-mono text-[12px] leading-relaxed text-error/90">
                           {e.stderr || <span className="text-faint">—</span>}
@@ -225,7 +245,7 @@ export default function History() {
                           to={`/editor/${e.project_id}`}
                           className="inline-flex items-center gap-1 text-[13px] font-medium text-primary hover:underline"
                         >
-                          Open in editor
+                          {t('history.open_editor')}
                           <Icon name="arrowRight" size={13} />
                         </Link>
                       </div>
@@ -244,7 +264,7 @@ export default function History() {
                 disabled={loading}
               >
                 <Icon name="chevronDown" size={15} />
-                Load more
+                {t('history.load_more')}
               </Button>
             </div>
           )}
@@ -256,9 +276,9 @@ export default function History() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => void handleDelete()}
         loading={deleting}
-        title="Delete this execution?"
-        message="This removes the run from your history. The source file is not affected."
-        confirmLabel="Delete execution"
+        title={t('history.delete_title')}
+        message={t('history.delete_msg')}
+        confirmLabel={t('history.delete_btn')}
       />
     </main>
   );

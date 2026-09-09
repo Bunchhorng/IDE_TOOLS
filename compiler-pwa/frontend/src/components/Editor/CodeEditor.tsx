@@ -1,6 +1,7 @@
 import Editor from '@monaco-editor/react';
-import { useEffect, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { BeforeMount, OnMount } from '@monaco-editor/react';
+import type { editor } from 'monaco-editor';
 import { useTheme } from '../../context/ThemeContext';
 import { usePreferences } from '../../context/PreferencesContext';
 
@@ -106,13 +107,14 @@ function defineThemes(monaco: Parameters<BeforeMount>[0]) {
   });
 }
 
-export default function CodeEditor({
-  value,
-  language,
-  onChange,
-  readOnly = false,
-  autoFocus = false,
-}: CodeEditorProps) {
+export interface CodeEditorHandle {
+  /** Scroll the error line into view and place the cursor there. */
+  revealLine: (line: number) => void;
+}
+
+const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
+  function CodeEditorInner({ value, language, onChange, readOnly = false, autoFocus = false }, ref) {
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const { theme } = useTheme();
   const { prefs } = usePreferences();
   const monacoLanguage = LANGUAGE_MAP[language] || 'plaintext';
@@ -132,7 +134,22 @@ export default function CodeEditor({
     defineThemes(monaco);
   };
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      revealLine: (line: number) => {
+        const ed = editorRef.current;
+        if (!ed) return;
+        ed.revealLineInCenter(line);
+        ed.setPosition({ lineNumber: line, column: 1 });
+        ed.focus();
+      },
+    }),
+    [],
+  );
+
   const handleEditorMount: OnMount = (editor) => {
+    editorRef.current = editor;
     if (autoFocus) {
       editor.focus();
       editor.setPosition({ lineNumber: 1, column: 1 });
@@ -154,6 +171,7 @@ export default function CodeEditor({
       options={{
         readOnly,
         minimap: { enabled: prefs.minimap && !isMobile },
+        mouseWheelZoom: true,
         fontSize: prefs.fontSize,
         fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, monospace",
         fontLigatures: prefs.fontLigatures,
@@ -174,4 +192,6 @@ export default function CodeEditor({
       }}
     />
   );
-}
+});
+
+export default CodeEditor;

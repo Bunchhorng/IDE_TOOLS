@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { cn } from '../../lib/cn';
+import { useI18n } from '../../i18n';
 import type { ExecutionStatus } from '../../types';
 
 type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
@@ -67,29 +68,26 @@ const STATUS_TONE: Record<ExecutionStatus, Tone> = {
 };
 
 const STATUS_LABEL: Record<ExecutionStatus, string> = {
-  queued: 'Queued',
-  running: 'Running',
-  success: 'Passed',
-  compile_error: 'Compile Error',
-  runtime_error: 'Runtime Error',
-  timeout: 'Timeout',
-  memory_limit: 'Memory Limit',
-  system_error: 'System Error',
-  failed: 'Failed',
+  queued: 'status.queued',
+  running: 'status.running',
+  success: 'status.success',
+  compile_error: 'status.compile_error',
+  runtime_error: 'status.runtime_error',
+  timeout: 'status.timeout',
+  memory_limit: 'status.memory_limit',
+  system_error: 'status.system_error',
+  failed: 'status.failed',
 };
 
 export function StatusBadge({ status, className }: { status: ExecutionStatus; className?: string }) {
+  const { t } = useI18n();
   return (
     <Badge tone={STATUS_TONE[status]} dot pulse={status === 'running' || status === 'queued'} className={className}>
-      {STATUS_LABEL[status]}
+      {t(STATUS_LABEL[status])}
     </Badge>
   );
 }
 
 export function statusTone(status: ExecutionStatus): Tone {
   return STATUS_TONE[status];
-}
-
-export function statusLabel(status: ExecutionStatus): string {
-  return STATUS_LABEL[status];
 }

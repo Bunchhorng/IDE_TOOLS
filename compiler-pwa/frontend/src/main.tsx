@@ -6,17 +6,20 @@ import { ThemeProvider } from './context/ThemeContext';
 import { PreferencesProvider } from './context/PreferencesContext';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider } from './context/AuthContext';
+import { I18nProvider } from './i18n';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider>
-      <PreferencesProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </ToastProvider>
-      </PreferencesProvider>
-    </ThemeProvider>
+    <I18nProvider>
+      <ThemeProvider>
+        <PreferencesProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </ToastProvider>
+        </PreferencesProvider>
+      </ThemeProvider>
+    </I18nProvider>
   </StrictMode>,
 );
