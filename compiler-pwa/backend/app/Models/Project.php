@@ -31,6 +31,11 @@ class Project extends Model
         return $this->hasMany(File::class);
     }
 
+    public function folders(): HasMany
+    {
+        return $this->hasMany(Folder::class);
+    }
+
     public function executions(): HasMany
     {
         return $this->hasMany(Execution::class);

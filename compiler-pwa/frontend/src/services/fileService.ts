@@ -5,12 +5,14 @@ interface CreateFileData {
   filename: string;
   language: string;
   content?: string;
+  folder_id?: number | null;
 }
 
 interface UpdateFileData {
   filename?: string;
   language?: string;
   content?: string;
+  folder_id?: number | null;
 }
 
 export const fileService = {

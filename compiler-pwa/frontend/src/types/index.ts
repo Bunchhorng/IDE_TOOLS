@@ -20,9 +20,19 @@ export interface Project {
 export interface File {
   id: number;
   project_id: number;
+  folder_id: number | null;
   filename: string;
   language: string;
   content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Folder {
+  id: number;
+  project_id: number;
+  parent_id: number | null;
+  name: string;
   created_at: string;
   updated_at: string;
 }

@@ -17,6 +17,11 @@ class StoreFileRequest extends FormRequest
         $projectId = optional($this->route('project'))->id ?? $this->route('project');
 
         return [
+            'folder_id' => [
+                'nullable',
+                'integer',
+                'exists:folders,id',
+            ],
             'filename' => [
                 'required',
                 'string',
@@ -27,5 +32,22 @@ class StoreFileRequest extends FormRequest
             'language' => ['required', 'string', 'max:20', Rule::exists('languages', 'slug')],
             'content' => ['nullable', 'string', 'max:5242880'],
         ];
+    }
+
+    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    {
+        $validator->after(function (\Illuminate\Validation\Validator $validator) {
+            $folderId = $this->input('folder_id');
+            if (! $folderId) {
+                return;
+            }
+
+            $projectId = optional($this->route('project'))->id ?? $this->route('project');
+            $folder = \App\Models\Folder::find($folderId);
+
+            if (! $folder || $folder->project_id !== $projectId) {
+                $validator->errors()->add('folder_id', 'The folder does not belong to this project.');
+            }
+        });
     }
 }

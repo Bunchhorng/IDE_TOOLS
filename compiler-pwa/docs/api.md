@@ -34,10 +34,20 @@ Authentication: Sanctum Bearer token (`Authorization: Bearer <token>`).
 | Method | Endpoint | Description |
 | ------ | -------- | ----------- |
 | GET    | `/api/projects/{project}/files` | List files in project |
-| POST   | `/api/projects/{project}/files` | Create. Body: `filename`, `language`, `content?` |
+| POST   | `/api/projects/{project}/files` | Create. Body: `filename`, `language`, `content?`, `folder_id?` |
 | GET    | `/api/files/{id}` | Show file |
-| PUT    | `/api/files/{id}` | Update `filename`/`language`/`content` |
+| PUT    | `/api/files/{id}` | Update `filename`/`language`/`content`/`folder_id` |
 | DELETE | `/api/files/{id}` | Delete |
+
+## Folders (auth required)
+
+| Method | Endpoint | Description |
+| ------ | -------- | ----------- |
+| GET    | `/api/projects/{project}/folders` | List folders in project (flat) |
+| POST   | `/api/projects/{project}/folders` | Create. Body: `name`, `parent_id?` |
+| GET    | `/api/folders/{id}` | Show folder |
+| PUT    | `/api/folders/{id}` | Update `name` and/or `parent_id` (move) |
+| DELETE | `/api/folders/{id}` | Delete folder, its subfolders and their files (cascade) |
 
 ## Languages
 

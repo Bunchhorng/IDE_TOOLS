@@ -140,6 +140,12 @@ full-screen terminal, and More opens a bottom sheet.
   clears at run start, so the next run always asks for new input from the
   first prompt (the previous transcript stays visible until the new run
   replaces it). Switching files also resets the console.
+- **File explorer tree** — files live in nested folders (`folders` table,
+  `files.folder_id`). The sidebar sorts folders then files alphabetically,
+  supports expand/collapse, and via each row's `⋮` menu: create a file or
+  subfolder inside a folder, rename, move (file or folder), and delete.
+  Deleting a folder removes its subfolders and their files. New folders and
+  files are created at the project root with the `+` buttons in the header.
 - **More sheet** — language selection, Save, dark/light toggle, Download file,
   Share file (Web Share API with clipboard fallback).
 - **Share** — top bar (desktop) and More sheet (mobile); uses `navigator.share`

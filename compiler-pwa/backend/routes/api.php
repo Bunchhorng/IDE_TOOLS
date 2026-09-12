@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ExecutionController;
 use App\Http\Controllers\FileController;
+use App\Http\Controllers\FolderController;
 use App\Http\Controllers\LanguageController;
 use App\Http\Controllers\ProjectController;
 use Illuminate\Support\Facades\Route;
@@ -30,6 +31,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/files/{file}', [FileController::class, 'show']);
     Route::put('/files/{file}', [FileController::class, 'update']);
     Route::delete('/files/{file}', [FileController::class, 'destroy']);
+
+    Route::get('/projects/{project}/folders', [FolderController::class, 'index']);
+    Route::post('/projects/{project}/folders', [FolderController::class, 'store']);
+    Route::get('/folders/{folder}', [FolderController::class, 'show']);
+    Route::put('/folders/{folder}', [FolderController::class, 'update']);
+    Route::delete('/folders/{folder}', [FolderController::class, 'destroy']);
 
     Route::post('/execute', [ExecutionController::class, 'store']);
     Route::get('/executions', [ExecutionController::class, 'index']);

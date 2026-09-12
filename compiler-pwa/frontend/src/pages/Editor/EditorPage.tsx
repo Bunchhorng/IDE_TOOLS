@@ -27,9 +27,10 @@ import { usePreferences } from '../../context/PreferencesContext';
 import { useI18n } from '../../i18n';
 import { projectService } from '../../services/projectService';
 import { fileService } from '../../services/fileService';
+import { folderService } from '../../services/folderService';
 import { executionService } from '../../services/executionService';
 import { languageService } from '../../services/languageService';
-import type { Project, File, Language, Execution } from '../../types';
+import type { Project, File, Folder, Language, Execution } from '../../types';
 
 type MobileTab = 'code' | 'files' | 'output' | 'more';
 
@@ -43,6 +44,9 @@ export default function EditorPage() {
 
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  /** Editor tabs (open files) in display order — closing a tab removes it here only. */
+  const [openFileIds, setOpenFileIds] = useState<number[]>([]);
   const [activeFile, setActiveFile] = useState<File | null>(null);
   const [savedContent, setSavedContent] = useState('');
   const [savedLanguage, setSavedLanguage] = useState('cpp');
@@ -56,7 +60,7 @@ export default function EditorPage() {
   const [mobileTab, setMobileTab] = useState<MobileTab>('code');
   const [terminalTab, setTerminalTab] = useState<PanelTab>('terminal');
   const [moreOpen, setMoreOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<File | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: 'file' | 'folder'; item: File | Folder } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const editorRef = useRef<CodeEditorHandle>(null);
   const consoleRef = useRef<ConsoleInputHandle>(null);
@@ -88,6 +92,12 @@ export default function EditorPage() {
     [execution, inputStarved],
   );
 
+  /** Open tabs in display order (project files still visible in the explorer). */
+  const openFiles = useMemo(() => {
+    const byId = new Map(files.map((f) => [f.id, f]));
+    return openFileIds.map((id) => byId.get(id)).filter((f): f is File => !!f);
+  }, [files, openFileIds]);
+
   const loadProject = useCallback(async () => {
     if (!projectId) return;
     try {
@@ -106,6 +116,7 @@ export default function EditorPage() {
       setFiles(response.data);
       if (response.data.length > 0) {
         const first = response.data[0];
+        setOpenFileIds([first.id]);
         setActiveFile(first);
         setSavedContent(first.content);
         setSavedLanguage(first.language);
@@ -116,6 +127,16 @@ export default function EditorPage() {
       setLoading(false);
     }
   }, [projectId, toast, t]);
+
+  const loadFolders = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const response = await folderService.getByProject(Number(projectId));
+      setFolders(response.data);
+    } catch {
+      /* folders are optional */
+    }
+  }, [projectId]);
 
   const loadLanguages = useCallback(async () => {
     try {
@@ -129,8 +150,9 @@ export default function EditorPage() {
   useEffect(() => {
     void loadProject();
     void loadFiles();
+    void loadFolders();
     void loadLanguages();
-  }, [loadProject, loadFiles, loadLanguages]);
+  }, [loadProject, loadFiles, loadFolders, loadLanguages]);
 
   const selectedLanguage = activeFile?.language ?? languages[0]?.slug ?? 'cpp';
 
@@ -333,6 +355,7 @@ export default function EditorPage() {
     if (activeFile && activeFile.id !== file.id && dirty) {
       await handleSave();
     }
+    setOpenFileIds((ids) => (ids.includes(file.id) ? ids : [...ids, file.id]));
     setActiveFile(file);
     setSavedContent(file.content);
     setSavedLanguage(file.language);
@@ -342,22 +365,43 @@ export default function EditorPage() {
     setStdin('');
   };
 
+  /** Close an editor tab only — the file stays in the project (explorer). */
+  const handleCloseTab = (file: File) => {
+    void (async () => {
+      // Flush unsaved edits for the closing file before it leaves the editor.
+      if (file.id === activeFile?.id && dirty) await handleSave();
+      const remaining = openFileIds.filter((id) => id !== file.id);
+      setOpenFileIds(remaining);
+      if (activeFile?.id === file.id) {
+        const nextFile = files.find((f) => f.id === remaining[0]) ?? null;
+        setActiveFile(nextFile);
+        setSavedContent(nextFile ? nextFile.content : '');
+        setSavedLanguage(nextFile ? nextFile.language : 'cpp');
+        setExecution(null);
+        setInputLines([]);
+        setStdin('');
+      }
+    })();
+  };
+
   const handleLanguageChange = (slug: string) => {
     if (!activeFile || slug === activeFile.language) return;
     setActiveFile((f) => (f ? { ...f, language: slug } : f));
     setFiles((fs) => fs.map((f) => (f.id === activeFile.id ? { ...f, language: slug } : f)));
   };
 
-  const handleCreateFile = (filename: string, language: string, content?: string) => {
+  const handleCreateFile = (filename: string, language: string, folderId: number | null = null, content?: string) => {
     void (async () => {
       try {
         if (activeFile && dirty) await handleSave();
         const response = await fileService.create(pId, {
+          folder_id: folderId,
           filename,
           language,
           content: content ?? getTemplateContent(language, 'empty'),
         });
         setFiles((fs) => [...fs, response.data]);
+        setOpenFileIds((ids) => [...ids, response.data.id]);
         setActiveFile(response.data);
         setSavedContent(response.data.content);
         setSavedLanguage(response.data.language);
@@ -368,28 +412,65 @@ export default function EditorPage() {
     })();
   };
 
-  const handleDeleteFile = (file: File) => setDeleteTarget(file);
+  const handleCreateFolder = (name: string, parentId: number | null = null) => {
+    void (async () => {
+      try {
+        const response = await folderService.create(pId, { name, parent_id: parentId });
+        setFolders((fs) => [...fs, response.data]);
+        toast.success(t('toast.folder_created'), name);
+      } catch {
+        toast.error(t('toast.failed_create_folder'));
+      }
+    })();
+  };
+
+  const handleDeleteFile = (file: File) => setDeleteTarget({ kind: 'file', item: file });
+
+  const handleDeleteFolder = (folder: Folder) => setDeleteTarget({ kind: 'folder', item: folder });
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
+    const { kind, item } = deleteTarget;
     try {
-      await fileService.delete(deleteTarget.id);
-      const next = files.filter((f) => f.id !== deleteTarget.id);
-      setFiles(next);
-      if (activeFile?.id === deleteTarget.id) {
-        const head = next[0] ?? null;
-        setActiveFile(head);
-        setSavedContent(head ? head.content : '');
-        setSavedLanguage(head ? head.language : 'cpp');
+      if (kind === 'file') {
+        await fileService.delete(item.id);
+        const next = files.filter((f) => f.id !== item.id);
+        setFiles(next);
+        setOpenFileIds((ids) => ids.filter((id) => id !== item.id));
+        if (activeFile?.id === item.id) activateHead(next);
+        toast.success(t('toast.file_deleted'), (item as File).filename);
+      } else {
+        // Collect the folder and every descendant so the tree update mirrors
+        // the server-side cascade delete.
+        const removed = new Set<number>();
+        const collect = (id: number) => {
+          removed.add(id);
+          for (const f of folders) if (f.parent_id === id) collect(f.id);
+        };
+        collect((item as Folder).id);
+        await folderService.delete(item.id);
+        setFolders((fs) => fs.filter((f) => !removed.has(f.id)));
+        const nextFiles = files.filter((f) => !(f.folder_id !== null && removed.has(f.folder_id)));
+        setFiles(nextFiles);
+        if (activeFile?.id && activeFile.folder_id !== null && removed.has(activeFile.folder_id)) {
+          activateHead(nextFiles);
+        }
+        toast.success(t('toast.folder_deleted'), (item as Folder).name);
       }
-      toast.success(t('toast.file_deleted'), deleteTarget.filename);
     } catch {
-      toast.error(t('toast.failed_delete_file'));
+      toast.error(kind === 'file' ? t('toast.failed_delete_file') : t('toast.failed_delete_folder'));
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
     }
+  };
+
+  const activateHead = (list: File[]) => {
+    const head = list[0] ?? null;
+    setActiveFile(head);
+    setSavedContent(head ? head.content : '');
+    setSavedLanguage(head ? head.language : 'cpp');
   };
 
   const handleRenameFile = (file: File, newName: string) => {
@@ -404,6 +485,45 @@ export default function EditorPage() {
         toast.success(t('toast.renamed'), newName);
       } catch {
         toast.error(t('toast.failed_rename_file'));
+      }
+    })();
+  };
+
+  const handleRenameFolder = (folder: Folder, newName: string) => {
+    void (async () => {
+      try {
+        const response = await folderService.update(folder.id, { name: newName });
+        const patch = { name: response.data.name, updated_at: response.data.updated_at };
+        setFolders((fs) => fs.map((f) => (f.id === folder.id ? { ...f, ...patch } : f)));
+        toast.success(t('toast.renamed'), newName);
+      } catch {
+        toast.error(t('toast.failed_rename_folder'));
+      }
+    })();
+  };
+
+  const handleMoveFile = (file: File, folderId: number | null) => {
+    void (async () => {
+      try {
+        const response = await fileService.update(file.id, { folder_id: folderId });
+        const patch = { folder_id: response.data.folder_id, updated_at: response.data.updated_at };
+        setFiles((fs) => fs.map((f) => (f.id === file.id ? { ...f, ...patch } : f)));
+        toast.success(t('toast.moved'), file.filename);
+      } catch {
+        toast.error(t('toast.failed_move_file'));
+      }
+    })();
+  };
+
+  const handleMoveFolder = (folder: Folder, parentId: number | null) => {
+    void (async () => {
+      try {
+        const response = await folderService.update(folder.id, { parent_id: parentId });
+        const patch = { parent_id: response.data.parent_id, updated_at: response.data.updated_at };
+        setFolders((fs) => fs.map((f) => (f.id === folder.id ? { ...f, ...patch } : f)));
+        toast.success(t('toast.moved'), folder.name);
+      } catch {
+        toast.error(t('toast.failed_move_folder'));
       }
     })();
   };
@@ -480,12 +600,18 @@ export default function EditorPage() {
         >
           <FileExplorerSidebar
             files={files}
+            folders={folders}
             activeFileId={activeFile?.id ?? null}
             projectName={project?.name ?? 'Project'}
             onSelectFile={handleSelectFile}
             onCreateFile={handleCreateFile}
+            onCreateFolder={handleCreateFolder}
             onDeleteFile={handleDeleteFile}
+            onDeleteFolder={handleDeleteFolder}
             onRenameFile={handleRenameFile}
+            onRenameFolder={handleRenameFolder}
+            onMoveFile={handleMoveFile}
+            onMoveFolder={handleMoveFolder}
           />
           <button
             type="button"
@@ -500,6 +626,7 @@ export default function EditorPage() {
           <div className="min-h-0 flex-1 bg-raised/50 lg:hidden">
             <FileExplorerSidebar
               files={files}
+              folders={folders}
               activeFileId={activeFile?.id ?? null}
               projectName={project?.name ?? 'Project'}
               onSelectFile={(file) => {
@@ -507,8 +634,13 @@ export default function EditorPage() {
                 setMobileTab('code');
               }}
               onCreateFile={handleCreateFile}
+              onCreateFolder={handleCreateFolder}
               onDeleteFile={handleDeleteFile}
+              onDeleteFolder={handleDeleteFolder}
               onRenameFile={handleRenameFile}
+              onRenameFolder={handleRenameFolder}
+              onMoveFile={handleMoveFile}
+              onMoveFolder={handleMoveFolder}
             />
           </div>
         )}
@@ -516,11 +648,11 @@ export default function EditorPage() {
         {(mobileTab === 'code' || mobileTab === 'more') && (
           <main className="flex min-h-0 min-w-0 flex-1 flex-col">
             <EditorTabs
-              files={files}
+              files={openFiles}
               activeFileId={activeFile?.id ?? null}
               dirtyIds={new Set(dirty && activeFile ? [activeFile.id] : [])}
               onSelect={handleSelectFile}
-              onCloseTab={setDeleteTarget}
+              onCloseTab={handleCloseTab}
             />
 
             <div className="flex min-h-0 flex-1">
@@ -704,9 +836,19 @@ export default function EditorPage() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => void confirmDelete()}
         loading={deleting}
-        title={t('editor.delete_confirm_title', { name: deleteTarget?.filename ?? '' })}
-        message={t('editor.delete_confirm_msg')}
-        confirmLabel={t('editor.delete_confirm_btn')}
+        title={
+          deleteTarget?.kind === 'folder'
+            ? t('editor.delete_folder_confirm_title', { name: (deleteTarget.item as Folder).name })
+            : t('editor.delete_confirm_title', { name: (deleteTarget?.item as File | undefined)?.filename ?? '' })
+        }
+        message={
+          deleteTarget?.kind === 'folder'
+            ? t('editor.delete_folder_confirm_msg')
+            : t('editor.delete_confirm_msg')
+        }
+        confirmLabel={
+          deleteTarget?.kind === 'folder' ? t('editor.delete_folder_confirm_btn') : t('editor.delete_confirm_btn')
+        }
       />
 
       <div className="h-[calc(4rem+env(safe-area-inset-bottom))] lg:hidden" aria-hidden="true" />

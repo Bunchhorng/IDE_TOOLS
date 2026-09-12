@@ -5,22 +5,21 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class File extends Model
+class Folder extends Model
 {
     use HasFactory;
 
     protected $fillable = [
         'project_id',
-        'folder_id',
-        'filename',
-        'language',
-        'content',
+        'parent_id',
+        'name',
     ];
 
     protected $casts = [
         'project_id' => 'integer',
-        'folder_id' => 'integer',
+        'parent_id' => 'integer',
     ];
 
     public function project(): BelongsTo
@@ -28,13 +27,18 @@ class File extends Model
         return $this->belongsTo(Project::class);
     }
 
-    public function folder(): BelongsTo
+    public function parent(): BelongsTo
     {
-        return $this->belongsTo(Folder::class);
+        return $this->belongsTo(Folder::class, 'parent_id');
     }
 
-    public function executions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function children(): HasMany
     {
-        return $this->hasMany(Execution::class);
+        return $this->hasMany(Folder::class, 'parent_id');
+    }
+
+    public function files(): HasMany
+    {
+        return $this->hasMany(File::class, 'folder_id');
     }
 }

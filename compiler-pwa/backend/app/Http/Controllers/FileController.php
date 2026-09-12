@@ -30,6 +30,7 @@ class FileController extends Controller
         $this->authorize('create', $project);
 
         $file = $project->files()->create([
+            'folder_id' => $request->folder_id,
             'filename' => $request->filename,
             'language' => $request->language,
             'content' => $request->content ?? '',
@@ -57,7 +58,7 @@ class FileController extends Controller
     {
         $this->authorize('update', $file);
 
-        $file->update($request->only(['filename', 'language', 'content']));
+        $file->update($request->only(['folder_id', 'filename', 'language', 'content']));
 
         return response()->json([
             'success' => true,
