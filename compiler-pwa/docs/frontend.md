@@ -127,6 +127,19 @@ full-screen terminal, and More opens a bottom sheet.
 - **Run flow** — `POST /api/execute`, then poll `GET /api/executions/{id}` until
   a terminal status; the FAB/top-bar button shows a running spinner. On mobile,
   running keeps the user on the Code tab so the output below updates in place.
+- **VS Code-style console** — before any run the Terminal tab is empty (just
+  the "Press Run" hint). Once a run happens, `input()` / `scanf` / `cin`
+  prompts detected statically in the code render inline where they appear.
+  You type **at the prompt** (like a real terminal): Enter commits a line, and
+  once every detected prompt has an answer the run fires automatically — the
+  last Enter acts as the Run button. After a run, stdout and the typed input
+  are interleaved into one transcript (`Enter name: Alice` → `Alice` on the
+  next line), and the still-unanswered prompt stays live in the caret row.
+  Multi-line paste fills all prompts at once and auto-runs.
+- **Re-running** — every run is a fresh console session: the committed input
+  clears at run start, so the next run always asks for new input from the
+  first prompt (the previous transcript stays visible until the new run
+  replaces it). Switching files also resets the console.
 - **More sheet** — language selection, Save, dark/light toggle, Download file,
   Share file (Web Share API with clipboard fallback).
 - **Share** — top bar (desktop) and More sheet (mobile); uses `navigator.share`

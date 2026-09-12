@@ -4,7 +4,6 @@ import { Tabs } from '../ui/Tabs';
 import { Button } from '../ui/Button';
 import { StatusBadge } from '../ui/Badge';
 import { Icon } from '../ui/Icon';
-import { formatExecutionTime, formatMemory } from '../../lib/format';
 import { explainError, isInputStarved } from '../../lib/errorHints';
 import { buildSession, detectPrompts } from '../../lib/prompts';
 import { TerminalSession } from './TerminalSession';
@@ -15,9 +14,7 @@ import type { Execution, ExecutionStatus } from '../../types';
 interface TerminalPanelProps {
   execution: Execution | null;
   isRunning: boolean;
-  stdin: string;
   hasErrors: boolean;
-  needsStdin?: boolean;
   tab?: PanelTab;
   onTabChange?: (tab: PanelTab) => void;
   /** Language of the active file (improves error pattern matching). */
@@ -37,6 +34,10 @@ interface TerminalPanelProps {
   onFocusConsole?: () => void;
   /** Fires when the program starts waiting for input (mobile can switch tabs). */
   onInputReady?: () => void;
+  /** Fired when every detected prompt has an answer — the parent starts the run (VS Code-style auto-run). */
+  onAllLinesCommitted?: () => void;
+  /** Clear the terminal output and console history. */
+  onClear?: () => void;
 }
 
 export type PanelTab = 'terminal' | 'output' | 'errors';
@@ -67,17 +68,17 @@ function BilingualErrorTitle({
   return (
     <div className="mb-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
       <div>
-        <p className="text-[13px] font-semibold text-error">{translations.en[key] ?? key}</p>
-        <p className="text-[11px] leading-snug text-error/60">{translations.km[key] ?? translations.en[key]}</p>
+        <p className="text-[15px] font-semibold leading-tight text-error lg:text-[13px]">{translations.en[key] ?? key}</p>
+        <p className="mt-0.5 text-[12px] leading-snug text-error/60 lg:text-[11px]">{translations.km[key] ?? translations.en[key]}</p>
       </div>
       {line !== undefined && (
         <button
           type="button"
           onClick={() => onGoToLine?.(line)}
           title={t('terminal.go_to_line')}
-          className="inline-flex items-center gap-1 rounded bg-error/10 px-1.5 py-0.5 text-[10px] font-medium text-error/80 transition-colors hover:bg-error/20 hover:text-error"
+          className="inline-flex items-center gap-1 rounded bg-error/10 px-2 py-1 text-[11px] font-medium text-error/80 transition-colors hover:bg-error/20 hover:text-error lg:px-1.5 lg:py-0.5 lg:text-[10px]"
         >
-          <Icon name="arrowRight" size={10} />
+          <Icon name="arrowRight" size={11} />
           line {line}
         </button>
       )}
@@ -115,12 +116,12 @@ function ErrorDetails({
         <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2.5">
           <div className="flex items-start gap-2">
             <Icon name="alertTriangle" size={15} className="mt-0.5 shrink-0 text-warning" />
-            <div className="min-w-0 flex-1 text-[12px] leading-relaxed">
+            <div className="min-w-0 flex-1 text-[13px] leading-relaxed lg:text-[12px]">
               <p className="text-ink">{hint.en}</p>
               <p className="mt-0.5 text-mute">{hint.km}</p>
 
               {srcLine !== undefined && srcLine.trim() !== '' && (
-                <pre className="mt-2 overflow-x-auto rounded border border-edge bg-editor px-2.5 py-1.5 text-[12px] text-ink">
+                <pre className="mt-2 overflow-x-auto rounded border border-edge bg-editor px-2.5 py-1.5 text-[13px] text-ink lg:text-[12px]">
                   <span className="mr-2 select-none text-error/70">{errLine} │</span>
                   {srcLine}
                 </pre>
@@ -131,7 +132,7 @@ function ErrorDetails({
                   <button
                     type="button"
                     onClick={() => onGoToLine(errLine)}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-edge bg-raised px-2.5 py-1 text-[11px] font-medium text-mute transition-colors hover:text-ink"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-edge bg-raised px-3 py-1.5 text-[12px] font-medium text-mute transition-colors hover:text-ink lg:px-2.5 lg:py-1 lg:text-[11px]"
                   >
                     <Icon name="arrowRight" size={12} />
                     {translations.en['terminal.go_to_line']}
@@ -141,7 +142,7 @@ function ErrorDetails({
                   <button
                     type="button"
                     onClick={() => onFocusConsole?.()}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-info/40 bg-info/10 px-2.5 py-1 text-[11px] font-medium text-info transition-colors hover:bg-info/20"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-info/40 bg-info/10 px-3 py-1.5 text-[12px] font-medium text-info transition-colors hover:bg-info/20 lg:px-2.5 lg:py-1 lg:text-[11px]"
                   >
                     <Icon name="keyboard" size={12} />
                     {translations.en['terminal.type_input_now']}
@@ -152,12 +153,12 @@ function ErrorDetails({
                     <button
                       type="button"
                       onClick={() => onApplyFix(hint.fix!.line, hint.fix!.apply)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-success/40 bg-success/10 px-2.5 py-1 text-[11px] font-medium text-success transition-colors hover:bg-success/20"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-success/40 bg-success/10 px-3 py-1.5 text-[12px] font-medium text-success transition-colors hover:bg-success/20 lg:px-2.5 lg:py-1 lg:text-[11px]"
                     >
                       <Icon name="wand" size={12} />
                       {translations.en['terminal.quick_fix']} · {hint.fix.en}
                     </button>
-                    <p className="w-full text-[10px] leading-snug text-mute/80">{hint.fix.km}</p>
+                    <p className="w-full text-[11px] leading-snug text-mute/80 lg:text-[10px]">{hint.fix.km}</p>
                   </>
                 )}
               </div>
@@ -181,7 +182,7 @@ export interface TerminalPanelHandle {
 }
 
 export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>(
-  function TerminalPanel({ execution, isRunning, stdin, hasErrors, needsStdin = false, tab: externalTab, onTabChange, activeLanguage, fileContent, onGoToLine, onApplyFix, inputLines, onInputLinesChange, consoleRef, onFocusConsole, onInputReady }, ref) {
+  function TerminalPanel({ execution, isRunning, hasErrors, tab: externalTab, onTabChange, activeLanguage, fileContent, onGoToLine, onApplyFix, inputLines, onInputLinesChange, consoleRef, onFocusConsole, onInputReady, onAllLinesCommitted, onClear }, ref) {
   const internalConsoleRef = useRef<ConsoleInputHandle>(null);
   const consoleRefResolved = consoleRef ?? internalConsoleRef;
   const { t } = useI18n();
@@ -206,6 +207,8 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
   const stdout = execution?.stdout ?? '';
   const stderr = execution?.stderr ?? '';
   const sentStdin = execution?.stdin?.trim() ?? '';
+  /** Something to wipe: a past run, output, errors, or typed input. */
+  const canClear = !!execution || stderr !== '' || inputLines.length > 0;
 
   const handleCopy = async () => {
     const input = execution?.stdin?.trim() ? `[input]\n${execution.stdin}\n` : '';
@@ -219,11 +222,12 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
     }
   };
 
-  const outputEmpty = !isRunning && !execution && !stdout && !stderr;
-  const hasStdin = stdin.trim().length > 0;
-
   /** The code is fine — the program just ran before input was provided. */
   const waitingForInput = !!execution && !isRunning && isInputStarved(execution.stderr);
+  /** An input-starved run is a prompt, not a failure: never render it as an
+   *  error (badge stays hidden / Errors tab shows success). */
+  const effectiveStatus: ExecutionStatus | null =
+    execution && waitingForInput ? null : execution?.status ?? null;
   /** Errors tab still shows the raw EOFError detail if the user wants it. */
   const errorDetailsExecution = waitingForInput ? null : execution;
 
@@ -242,23 +246,26 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
     [fileContent, activeLanguage],
   );
 
-  /** Prompts shown in the transcript. The pending one (the next line the user
-   *  will type) is excluded — the inline caret row renders it itself, so it
-   *  appears exactly once, right where you type. */
-  const transcriptPrompts = useMemo(
-    () => (isRunning ? allPrompts : allPrompts.filter((_, i) => i !== inputLines.length)),
-    [isRunning, allPrompts, inputLines.length],
-  );
-
   // Terminal-style transcript: interleave stdout with echoed input.
+  // The truncate index counts the prompts ANSWERED by the run (lines in the
+  // run's stdin), not the live console lines — the console resets for the
+  // next run while the transcript stays intact.
   const session = useMemo(() => {
     if (!execution || isRunning) return null;
+    const answered = sentStdin ? execution.stdin!.split('\n').length : 0;
     return buildSession(
       stdout,
       sentStdin ? execution.stdin!.split('\n') : [],
-      transcriptPrompts,
+      allPrompts,
+      // The next unanswered prompt stays live in the caret row below — cut
+      // it from the transcript so it renders exactly once (never duplicated).
+      allPrompts[answered]?.text,
     );
-  }, [execution, isRunning, stdout, sentStdin, transcriptPrompts]);
+  }, [execution, isRunning, stdout, sentStdin, allPrompts]);
+
+  /** Input lines already rendered by the run's transcript — the console echo
+   *  only shows typed lines beyond these, so nothing is duplicated. */
+  const answeredCount = sentStdin ? (execution?.stdin?.split('\n').length ?? 0) : 0;
 
   /** Once a pure-output program finished (nothing to type, ever), the caret
    *  row is noise — hide it like a terminal that exited. Programs that read
@@ -268,7 +275,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-panel">
-      <div className="flex items-center justify-between border-b border-edge pr-2">
+      <div className="flex items-center justify-between border-b border-edge pr-1.5 lg:pr-2">
         <Tabs<PanelTab>
           tabs={[
             { value: 'output', label: t('terminal.output'), icon: 'terminal' },
@@ -278,10 +285,21 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
           value={tab}
           onChange={setTab}
         />
-        <div className="flex items-center gap-1">
-          {execution && (
-            <StatusBadge status={execution.status} className="mr-1 hidden sm:inline-flex" />
+
+        <div className="flex shrink-0 items-center gap-1">
+          {effectiveStatus && (
+            <StatusBadge status={effectiveStatus} className="mr-1 hidden sm:inline-flex" />
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClear}
+            disabled={!canClear}
+            aria-label={t('terminal.clear')}
+            title={t('terminal.clear')}
+          >
+            <Icon name="trash" size={15} />
+          </Button>
           <Button variant="ghost" size="icon" onClick={handleCopy} aria-label="Copy output">
             <Icon name={copied ? 'check' : 'copy'} size={15} />
           </Button>
@@ -291,16 +309,12 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
       <div className="min-h-0 flex-1 overflow-hidden">
         {tab === 'terminal' ? (
           <div className="flex h-full min-h-0 flex-col">
-            <div className="min-h-0 flex-1 overflow-auto bg-editor px-4 py-3 font-mono text-[13px] leading-relaxed scrollbar-thin">
+            <div className="min-h-0 flex-1 overflow-auto bg-editor px-4 py-3.5 font-mono text-[15px] leading-relaxed scrollbar-thin lg:px-4 lg:py-3 lg:text-[13px]">
               {isRunning && (
                 <div className="flex items-center gap-2 text-info">
                   <span className="h-3 w-3 animate-spin rounded-full border-2 border-info border-t-transparent" />
                   <span>{t('terminal.compiling')}</span>
                 </div>
-              )}
-
-              {outputEmpty && (
-                <p className="text-faint">{t('terminal.press_run', { key: 'Run' })}</p>
               )}
 
               {session ? (
@@ -312,7 +326,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
               {stderr && !waitingForInput && (
                 <div className="mt-2">
                   <BilingualErrorTitle
-                    status={execution?.status}
+                    status={effectiveStatus}
                     line={explainError(stderr, execution?.status, activeLanguage ?? execution?.language?.slug)?.line}
                     onGoToLine={onGoToLine}
                   />
@@ -327,47 +341,11 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
                 </div>
               )}
 
-              {waitingForInput && (
-                <div className="mt-2 flex items-start gap-2 rounded-md border border-info/30 bg-info/10 px-3 py-2.5">
-                  <Icon name="keyboard" size={15} className="mt-0.5 shrink-0 text-info" />
-                  <div className="min-w-0 text-[12px] leading-relaxed">
-                    <p className="font-semibold text-ink">{t('terminal.waiting_for_input')}</p>
-                    <p className="mt-0.5 text-mute">{t('terminal.waiting_for_input_desc')}</p>
-                  </div>
-                </div>
-              )}
-
-              {execution && !isRunning && (execution.execution_time !== null || execution.memory_usage !== null || execution.exit_code !== null) && (
-                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-edge pt-2.5 text-xs text-mute">
-                  {execution.execution_time !== null && (
-                    <span className="inline-flex items-center gap-1.5">
-                      <Icon name="clock" size={13} />
-                      {formatExecutionTime(execution.execution_time)}
-                    </span>
-                  )}
-                  {execution.memory_usage !== null && (
-                    <span className="inline-flex items-center gap-1.5">
-                      <Icon name="cpu" size={13} />
-                      {formatMemory(execution.memory_usage)}
-                    </span>
-                  )}
-                  {execution.exit_code !== null && (
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="font-semibold text-faint">{t('terminal.exit')}</span>
-                      <code className="rounded bg-raised px-1.5 py-0.5 text-[11px] text-ink">{execution.exit_code}</code>
-                    </span>
-                  )}
-                  {execution.exit_code !== null && execution.exit_code === 0 && (
-                    <span className="inline-flex items-center gap-1.5 text-success">
-                      <Icon name="checkCircle" size={13} />
-                      {t('terminal.completed')}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Inline prompt: type right here in the terminal, like VS Code. */}
-              {!consoleHidden && (
+              {/* Inline prompt: type right here in the terminal, like VS Code.
+                  The console stays empty until a run happens — the prompt row
+                  only appears once the program has run (and asks for input).
+                  Hidden while a run is in flight — only the spinner shows. */}
+              {!consoleHidden && !isRunning && !!execution && (
                 <ConsoleInput
                   ref={consoleRef}
                   code={fileContent ?? ''}
@@ -376,13 +354,14 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
                   onLinesChange={onInputLinesChange}
                   running={isRunning}
                   disabled={isRunning}
-                  showEcho={!session}
+                  echoFrom={session && !waitingForInput ? answeredCount : 0}
+                  onAllLinesCommitted={onAllLinesCommitted}
                 />
               )}
             </div>
           </div>
         ) : tab === 'errors' ? (
-          <div className="h-full overflow-auto bg-editor px-4 py-3 font-mono text-[13px] leading-relaxed scrollbar-thin">
+          <div className="h-full overflow-auto bg-editor px-4 py-3 font-mono text-[15px] leading-relaxed scrollbar-thin lg:py-3 lg:text-[13px]">
             {isRunning && (
               <div className="flex items-center gap-2 text-info">
                 <span className="h-3 w-3 animate-spin rounded-full border-2 border-info border-t-transparent" />
@@ -390,7 +369,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
               </div>
             )}
 
-            {!stderr && !isRunning && !hasErrors && (
+            {(!stderr || waitingForInput) && !isRunning && !hasErrors && (
               <p className="text-success">
                 <span className="flex items-center gap-1.5">
                   <Icon name="checkCircle" size={14} />
@@ -406,12 +385,12 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
               </div>
             )}
 
-            {stderr && (
+            {stderr && !waitingForInput && (
               <div className="flex items-start gap-2">
                 <Icon name="alertTriangle" size={14} className="mt-0.5 shrink-0 text-error" />
                 <div className="min-w-0 flex-1">
                   <BilingualErrorTitle
-                    status={execution?.status}
+                    status={effectiveStatus}
                     line={explainError(stderr, execution?.status, activeLanguage ?? execution?.language?.slug)?.line}
                     onGoToLine={onGoToLine}
                   />
@@ -428,48 +407,12 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
             )}
           </div>
         ) : (
-          <div className="h-full overflow-auto bg-editor px-4 py-3 font-mono text-[13px] leading-relaxed scrollbar-thin">
+          <div className="h-full overflow-auto bg-editor px-4 py-3 font-mono text-[15px] leading-relaxed scrollbar-thin lg:py-3 lg:text-[13px]">
             {isRunning && (
               <div className="flex items-center gap-2 text-info">
                 <span className="h-3 w-3 animate-spin rounded-full border-2 border-info border-t-transparent" />
                 <span>{t('terminal.compiling')}</span>
               </div>
-            )}
-
-            {outputEmpty && (
-              needsStdin && !hasStdin ? (
-                <div className="space-y-3">
-                  <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2.5">
-                    <Icon name="alertTriangle" size={15} className="mt-0.5 shrink-0 text-warning" />
-                    <div className="text-[12px] leading-relaxed text-mute">
-                      <span className="font-semibold text-ink">{t('terminal.stdin_warning')}</span>
-                      {' '}{t('terminal.add_input', { key: 'Run' })}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onFocusConsole?.()}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-edge bg-raised px-2.5 py-1.5 text-[12px] text-mute transition-colors hover:text-ink"
-                  >
-                    <Icon name="keyboard" size={13} />
-                    {t('terminal.write_input')}
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-faint">{t('terminal.press_run_results', { key: 'Run' })}</p>
-                  {hasStdin && (
-                    <button
-                      type="button"
-                      onClick={() => onFocusConsole?.()}
-                      className="flex items-center gap-1.5 rounded-md border border-edge bg-raised px-2.5 py-1.5 text-[12px] text-mute transition-colors hover:text-ink"
-                    >
-                      <Icon name="keyboard" size={13} />
-                      {t('terminal.input_review')}
-                    </button>
-                  )}
-                </div>
-              )
             )}
 
             {stdout && (
@@ -481,10 +424,10 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
               </div>
             )}
 
-            {execution && !isRunning && !sentStdin && needsStdin && (
-              <div className="mt-3 rounded-md border border-error/30 bg-error/10 px-3 py-2.5">
+            {execution && !isRunning && !sentStdin && allPrompts.length > 0 && (
+              <div className="mt-3 rounded-md border border-info/30 bg-info/10 px-3 py-2.5">
                 <div className="flex items-start gap-2">
-                  <Icon name="alertTriangle" size={15} className="mt-0.5 shrink-0 text-error" />
+                  <Icon name="keyboard" size={15} className="mt-0.5 shrink-0 text-info" />
                   <div className="text-[12px] leading-relaxed text-mute">
                     <span className="font-semibold text-ink">{t('terminal.no_input')}</span>
                     {' '}{t('terminal.add_input_tab')}
@@ -493,35 +436,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
               </div>
             )}
 
-            {execution && !isRunning && (execution.execution_time !== null || execution.memory_usage !== null || execution.exit_code !== null) && (
-              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-edge pt-2.5 text-xs text-mute">
-                {execution.execution_time !== null && (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Icon name="clock" size={13} />
-                    {formatExecutionTime(execution.execution_time)}
-                  </span>
-                )}
-                {execution.memory_usage !== null && (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Icon name="cpu" size={13} />
-                    {formatMemory(execution.memory_usage)}
-                  </span>
-                )}
-                {execution.exit_code !== null && (
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="font-semibold text-faint">{t('terminal.exit')}</span>
-                    <code className="rounded bg-raised px-1.5 py-0.5 text-[11px] text-ink">{execution.exit_code}</code>
-                  </span>
-                )}
-                {execution.exit_code !== null && execution.exit_code === 0 && (
-                  <span className="inline-flex items-center gap-1.5 text-success">
-                    <Icon name="checkCircle" size={13} />
-                    {t('terminal.completed')}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+            </div>
         )}
       </div>
     </div>

@@ -8,7 +8,7 @@ import type { SessionSegment } from '../../lib/prompts';
 export function TerminalSession({ segments }: { segments: SessionSegment[] }) {
   if (segments.length === 0) return null;
   return (
-    <pre className="whitespace-pre-wrap font-mono text-[13px] leading-relaxed">
+    <pre className="whitespace-pre-wrap font-mono leading-relaxed">
       {segments.map((seg, i) =>
         seg.type === 'in' ? (
           <span key={i} className="text-primary font-semibold">{seg.text}</span>

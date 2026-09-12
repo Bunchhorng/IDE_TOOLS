@@ -12,30 +12,51 @@ export interface PromptSpec {
  *   a, b = input().split()
  *   n = int(input("N: "))
  *   input()                       → no prompt
+ * Commented-out calls are ignored — a phantom prompt would pair the user's
+ * typed inputs with the wrong prompt in the transcript.
  */
 export function pythonPrompts(code: string): PromptSpec[] {
   const specs: PromptSpec[] = [];
+  // Strip quote-aware `#` comments before scanning.
+  const src = code
+    .split('\n')
+    .map((line) => {
+      let q: string | null = null;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (q) {
+          if (c === '\\') i++;
+          else if (c === q) q = null;
+          continue;
+        }
+        if (c === '"' || c === "'") q = c;
+        else if (c === '#') return line.slice(0, i);
+      }
+      return line;
+    })
+    .join('\n');
+
   const inputCall = /input\s*\(/g;
 
-  for (const match of code.matchAll(inputCall)) {
+  for (const match of src.matchAll(inputCall)) {
     // Balance parens from the match to find the full argument list.
     let depth = 1;
     let i = match.index + match[0].length;
-    while (i < code.length && depth > 0) {
-      const c = code[i];
+    while (i < src.length && depth > 0) {
+      const c = src[i];
       if (c === '(') depth++;
       else if (c === ')') depth--;
       if (depth > 0) i++;
     }
-    const args = code.slice(match.index + match[0].length, i);
+    const args = src.slice(match.index + match[0].length, i);
 
     // Prompt = first string literal, if any.
     const str = args.match(/(["'])(.*?)\1/);
     const text = str ? str[2] : '';
 
     // Count expected values: a, b = input().split() → 2
-    const lineStart = code.lastIndexOf('\n', match.index) + 1;
-    const lhs = code.slice(lineStart, match.index);
+    const lineStart = src.lastIndexOf('\n', match.index) + 1;
+    const lhs = src.slice(lineStart, match.index);
     const assign = lhs.match(/=\s*$/); // simple single assignment
     let count = 1;
     if (assign && /,\s*[^,]+/.test(lhs.slice(0, assign.index))) {
@@ -131,21 +152,51 @@ export interface SessionSegment {
 }
 
 /**
+ * Prompt text to display for the input line at `lineIndex` (0-based).
+ * A prompt that consumes N values (`a, b = input().split()`) shows its text
+ * only above its FIRST line; continuation lines get no prompt — exactly how
+ * a real terminal renders one prompt followed by N typed values.
+ * Returns '' for lines beyond the detected prompts.
+ */
+export function promptForLine(prompts: PromptSpec[], lineIndex: number): string {
+  let consumed = 0;
+  for (const p of prompts) {
+    const n = Math.max(1, p.count);
+    if (lineIndex < consumed + n) return lineIndex === consumed ? p.text : '';
+    consumed += n;
+  }
+  return '';
+}
+
+/**
  * Interleave program stdout with the user's typed input to build a
  * terminal-style transcript: each detected prompt found in stdout is
  * followed by the corresponding input value, echoed inline — exactly
  * how a real terminal renders a session.
+ *
+ * The echoed input always ends with a newline (the Enter key the user
+ * pressed), so program output that follows starts on its own line —
+ * e.g. `name = input("Enter name:"); print(name)` renders as:
+ *
+ *   Enter name: Alice
+ *   Alice
+ *
+ * @param truncateAt When provided, the transcript is cut at the first
+ *   occurrence of this (still-unanswered) prompt in the remaining output —
+ *   the live caret row renders that prompt instead, so it never appears twice.
  */
 export function buildSession(
   stdout: string,
   inputs: string[],
   prompts: PromptSpec[],
+  truncateAt?: string,
 ): SessionSegment[] {
   const parts: SessionSegment[] = [];
   let rest = stdout;
 
   inputs.forEach((input, i) => {
-    const prompt = prompts[i]?.text ?? '';
+    // A multi-value prompt only labels its first input line.
+    const prompt = promptForLine(prompts, i);
     const idx = prompt ? rest.indexOf(prompt) : -1;
     if (idx >= 0) {
       // Everything up to and including the prompt is program output.
@@ -162,8 +213,14 @@ export function buildSession(
       }
       parts.push({ type: 'out', text: `${prompt} ` });
     }
-    parts.push({ type: 'in', text: input });
+    parts.push({ type: 'in', text: `${input}\n` });
   });
+
+  // Cut the still-unanswered prompt out of the output — the caret row owns it.
+  if (truncateAt) {
+    const cut = rest.indexOf(truncateAt);
+    if (cut >= 0) rest = rest.slice(0, cut);
+  }
 
   if (rest) parts.push({ type: 'out', text: rest });
   return parts;

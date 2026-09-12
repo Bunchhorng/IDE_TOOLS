@@ -20,7 +20,6 @@ import { useResizable } from '../../hooks/useResizable';
 import { useResizableX } from '../../hooks/useResizableX';
 import { cn } from '../../lib/cn';
 import { getTemplateContent } from '../../lib/templates';
-import { codeNeedsInput } from '../../lib/needsInput';
 import { isInputStarved } from '../../lib/errorHints';
 import { useTheme } from '../../context/ThemeContext';
 import { useToast } from '../../context/ToastContext';
@@ -62,10 +61,12 @@ export default function EditorPage() {
   const editorRef = useRef<CodeEditorHandle>(null);
   const consoleRef = useRef<ConsoleInputHandle>(null);
   const terminalPanelRef = useRef<TerminalPanelHandle>(null);
-  /** True after a run ends with the program starved of input (EOFError). */
-  const awaitingInputRef = useRef(false);
   /** Always points at the latest handleRun (used by stale-safe callbacks). */
-  const handleRunRef = useRef<() => Promise<void>>(async () => {});
+  const handleRunRef = useRef<(continueSession?: boolean) => Promise<void>>(async () => {});
+  /** Mirror of isRunning for stale-safe callbacks (auto-run guard). */
+  const isRunningRef = useRef(false);
+  /** True when a run ended starved of input — the next committed line re-runs. */
+  const awaitingInputRef = useRef(false);
   const panel = useResizable({ initial: 240, min: 80 });
   const sidebar = useResizableX({ initial: 240, min: 140 });
 
@@ -73,16 +74,18 @@ export default function EditorPage() {
   const dirty =
     !!activeFile &&
     (activeFile.content !== savedContent || activeFile.language !== savedLanguage);
+  /** The run ended because stdin ran dry — the code is fine, input was missing. */
+  const inputStarved = useMemo(
+    () => !!execution && !isRunning && isInputStarved(execution.stderr),
+    [execution, isRunning],
+  );
   const hasErrors = useMemo(
     () =>
       !!execution &&
+      !inputStarved &&
       (['compile_error', 'runtime_error', 'timeout', 'memory_limit', 'system_error', 'failed'].includes(execution.status) ||
         !!execution.stderr),
-    [execution],
-  );
-  const needsStdin = useMemo(
-    () => codeNeedsInput(activeFile?.content ?? '', activeFile?.language),
-    [activeFile?.content, activeFile?.language],
+    [execution, inputStarved],
   );
 
   const loadProject = useCallback(async () => {
@@ -139,7 +142,7 @@ export default function EditorPage() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
-        if (!isRunning && activeFile) void handleRun();
+        if (!isRunning && activeFile) void handleRun(false);
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault();
@@ -183,29 +186,37 @@ export default function EditorPage() {
   };
 
   /**
-   * Sync committed console lines into the stdin buffer. When the program
-   * starved for input (EOFError) and the user commits another line,
-   * re-run automatically — like a real interactive terminal.
+   * Sync committed console lines into the stdin buffer. The run is started by
+   * the console itself (via onAllLinesCommitted) once the committed lines
+   * cover every input the program asks for — nothing runs early here.
    */
-  const handleInputLinesChange = useCallback(
-    (lines: string[]) => {
-      setInputLines((prev) => {
-        const grew = lines.length > prev.length;
-        if (grew && awaitingInputRef.current) {
-          awaitingInputRef.current = false;
-          window.setTimeout(() => void handleRunRef.current(), 0);
-        }
-        return lines;
-      });
-      setStdin(lines.join('\n'));
-    },
-    // handleRun is stable enough for this usage; called via setTimeout.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
+  const handleInputLinesChange = useCallback((lines: string[]) => {
+    setInputLines(lines);
+    setStdin(lines.join('\n'));
+  }, []);
 
-  const handleRun = async () => {
+  /**
+   * VS Code-style auto-run: fired by the console when the committed input
+   * covers every detected prompt (the last Enter acts like the Run button).
+   * Guarded against a run already in progress so Enter cannot double-fire.
+   * If the previous run starved of input, this is a continuation — the
+   * committed lines stay in the console and are all re-sent as stdin.
+   */
+  const handleAllLinesCommitted = useCallback(() => {
+    window.setTimeout(() => {
+      if (isRunningRef.current) return;
+      const continueSession = awaitingInputRef.current;
+      awaitingInputRef.current = false;
+      void handleRunRef.current(continueSession);
+    }, 0);
+  }, []);
+
+  const handleRun = async (continueSession = false) => {
     if (!activeFile || !project) return;
+    // Synchronous guard: Enter/Run can fire again while await handleSave()
+    // yields, so the isRunningRef check alone is not enough.
+    if (isRunningRef.current) return;
+    isRunningRef.current = true;
     if (
       window.matchMedia('(max-width: 1023px)').matches &&
       (mobileTab === 'files' || mobileTab === 'more')
@@ -215,6 +226,14 @@ export default function EditorPage() {
     // Flush any uncommitted console input so the last typed line is included.
     const finalStdin = consoleRef.current?.flushPending() ?? stdin;
     if (finalStdin !== stdin) setStdin(finalStdin);
+    if (!continueSession) {
+      // Fresh session (Run button / auto-run): clear the console so the next
+      // run asks for new input from the first prompt, like a new terminal.
+      // Continuations of an input-starved session KEEP the lines — the program
+      // restarts, and every answer so far is re-sent as stdin.
+      setInputLines([]);
+      setStdin('');
+    }
     if (dirty) await handleSave();
     setIsRunning(true);
     setExecution(null);
@@ -228,10 +247,11 @@ export default function EditorPage() {
       });
       const result = await executionService.pollStatus(response.data.id);
       setExecution(result);
-      // Program starved of input? Arm auto-rerun so the next committed line
-      // in the console row re-runs with the new stdin.
-      awaitingInputRef.current =
-        result.status === 'runtime_error' && isInputStarved(result.stderr);
+      // Input-starved runs are not failures: the terminal offers a fresh
+      // prompt and committing another line re-runs automatically (below).
+      if (result.status === 'runtime_error' && isInputStarved(result.stderr)) {
+        awaitingInputRef.current = true;
+      }
     } catch (err: unknown) {
       const data = (err as { response?: { data?: { data?: Execution } } })?.response?.data?.data;
       if (data) {
@@ -250,7 +270,7 @@ export default function EditorPage() {
           language_id: 0,
           status: 'system_error',
           source_code: '',
-          stdin: stdin || null,
+          stdin: finalStdin || null,
           stdout: '',
           stderr: message,
           exit_code: null,
@@ -261,6 +281,7 @@ export default function EditorPage() {
         });
       }
     } finally {
+      isRunningRef.current = false;
       setIsRunning(false);
     }
   };
@@ -281,6 +302,14 @@ export default function EditorPage() {
   const handleFocusConsole = () => {
     if (mobileTab === 'files' || mobileTab === 'more') setMobileTab('code');
     terminalPanelRef.current?.focusConsole();
+  };
+
+  /** Wipe the terminal: past output, errors, and any typed input. */
+  const handleClearTerminal = () => {
+    setExecution(null);
+    setStdin('');
+    setInputLines([]);
+    awaitingInputRef.current = false;
   };
 
   /** Program is waiting for input — make sure the console is visible. */
@@ -308,6 +337,9 @@ export default function EditorPage() {
     setSavedContent(file.content);
     setSavedLanguage(file.language);
     setExecution(null);
+    // Fresh console session for the new file.
+    setInputLines([]);
+    setStdin('');
   };
 
   const handleLanguageChange = (slug: string) => {
@@ -430,7 +462,7 @@ export default function EditorPage() {
         running={isRunning}
         canRun={!!activeFile}
         onSave={() => void handleSave()}
-        onRun={() => void handleRun()}
+        onRun={() => void handleRun(false)}
         onShare={() => void handleShare()}
         onDownload={handleDownload}
         onToggleSidebar={sidebar.toggle}
@@ -534,9 +566,7 @@ export default function EditorPage() {
                   ref={terminalPanelRef}
                   execution={execution}
                   isRunning={isRunning}
-                  stdin={stdin}
                   hasErrors={hasErrors}
-                  needsStdin={needsStdin}
                   tab={terminalTab}
                   onTabChange={setTerminalTab}
                   activeLanguage={activeFile?.language}
@@ -548,6 +578,8 @@ export default function EditorPage() {
                   consoleRef={consoleRef}
                   onFocusConsole={handleFocusConsole}
                   onInputReady={handleInputReady}
+                  onAllLinesCommitted={handleAllLinesCommitted}
+                  onClear={handleClearTerminal}
                 />
               </div>
             </div>
@@ -560,9 +592,7 @@ export default function EditorPage() {
               ref={terminalPanelRef}
               execution={execution}
               isRunning={isRunning}
-              stdin={stdin}
               hasErrors={hasErrors}
-              needsStdin={needsStdin}
               tab={terminalTab}
               onTabChange={setTerminalTab}
               activeLanguage={activeFile?.language}
@@ -574,6 +604,8 @@ export default function EditorPage() {
               consoleRef={consoleRef}
               onFocusConsole={handleFocusConsole}
               onInputReady={handleInputReady}
+              onAllLinesCommitted={handleAllLinesCommitted}
+              onClear={handleClearTerminal}
             />
           </main>
         )}
