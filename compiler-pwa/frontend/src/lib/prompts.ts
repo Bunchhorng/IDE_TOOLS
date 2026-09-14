@@ -200,9 +200,8 @@ export function buildSession(
     const idx = prompt ? rest.indexOf(prompt) : -1;
     if (idx >= 0) {
       // Everything up to and including the prompt is program output.
-      // Pad with a space so the echoed input doesn't glue onto the prompt.
       const head = rest.slice(0, idx + prompt.length);
-      parts.push({ type: 'out', text: /\s$/.test(head) ? head : `${head} ` });
+      parts.push({ type: 'out', text: head });
       rest = rest.slice(idx + prompt.length);
     } else if (prompt) {
       // Prompt expected but not found in stdout (e.g. buffered/absent):
@@ -211,7 +210,7 @@ export function buildSession(
         parts.push({ type: 'out', text: rest });
         rest = '';
       }
-      parts.push({ type: 'out', text: `${prompt} ` });
+      parts.push({ type: 'out', text: prompt });
     }
     parts.push({ type: 'in', text: `${input}\n` });
   });

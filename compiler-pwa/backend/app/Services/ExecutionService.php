@@ -28,6 +28,7 @@ class ExecutionService
             'file_id' => $data['file_id'] ?? null,
             'language_id' => $language->id,
             'status' => Execution::STATUS_QUEUED,
+            'interactive' => $data['interactive'] ?? false,
             'source_code' => $data['code'],
             'stdin' => $data['stdin'] ?? '',
             'stdout' => '',
@@ -37,6 +38,23 @@ class ExecutionService
         Log::info('Execution created', ['execution_id' => $execution->id]);
 
         return $execution;
+    }
+
+    /**
+     * Apply a live (or finalized) result from an interactive sandbox session
+     * to the execution record. Called after each input line and poll.
+     */
+    public function applyInteractiveResult(Execution $execution, array $result): void
+    {
+        $execution->update([
+            'status' => $result['status'],
+            'stdout' => $result['stdout'] ?? '',
+            'stderr' => $result['stderr'] ?? '',
+            'exit_code' => $result['exit_code'],
+            'execution_time' => $result['execution_time'],
+        ]);
+        // Transient flag the resource exposes so callers stop polling when done.
+        $execution->interactive_finished = $result['interactive_finished'] ?? false;
     }
 
     /**

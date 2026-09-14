@@ -11,6 +11,7 @@ use App\Models\Language;
 use App\Models\Project;
 use App\Models\File;
 use App\Services\ExecutionService;
+use App\Services\DockerExecutionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -18,10 +19,12 @@ use Illuminate\Support\Facades\RateLimiter;
 class ExecutionController extends Controller
 {
     protected ExecutionService $service;
+    protected DockerExecutionService $dockerService;
 
-    public function __construct(ExecutionService $service)
+    public function __construct(ExecutionService $service, DockerExecutionService $dockerService)
     {
         $this->service = $service;
+        $this->dockerService = $dockerService;
     }
 
     public function store(ExecuteRequest $request): JsonResponse
@@ -71,7 +74,11 @@ class ExecutionController extends Controller
 
         $execution = $this->service->queueExecution($user, $request->validated());
 
-        ExecuteJob::dispatch($execution);
+        // Interactive sessions are started on demand (POST .../interactive/start),
+        // not through the queue — the sandbox stays alive waiting for input.
+        if (! $request->boolean('interactive')) {
+            ExecuteJob::dispatch($execution);
+        }
 
         return response()->json([
             'success' => true,
@@ -116,12 +123,80 @@ class ExecutionController extends Controller
     {
         $this->authorize('delete', $execution);
 
+        // Stop any live interactive sandbox before deleting the record.
+        if ($execution->interactive) {
+            $this->dockerService->stopInteractive($execution->id);
+        }
+
         $execution->delete();
 
         return response()->json([
             'success' => true,
             'message' => 'Execution deleted successfully',
             'data' => null,
+        ]);
+    }
+
+    /** Start the sandbox container for a queued interactive execution. */
+    public function startInteractive(Execution $execution): JsonResponse
+    {
+        $this->authorize('view', $execution);
+
+        $language = $execution->language;
+        if (! $language) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Language configuration not found',
+                'data' => null,
+            ], 422);
+        }
+
+        $result = $this->dockerService->startInteractive($execution, $language);
+        $this->service->applyInteractiveResult($execution, $result);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Interactive session started',
+            'data' => new ExecutionResource($execution),
+        ]);
+    }
+
+    /** Forward one line of input to the running program, or stop the session. */
+    public function provideInput(Execution $execution, Request $request): JsonResponse
+    {
+        $this->authorize('view', $execution);
+
+        $request->validate([
+            'line' => ['nullable', 'string', 'max:1000000'],
+            'close' => ['sometimes', 'boolean'],
+        ]);
+
+        $result = $this->dockerService->provideInput(
+            $execution,
+            $request->input('line'),
+            $request->boolean('close', false),
+        );
+        $this->service->applyInteractiveResult($execution, $result);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Input delivered',
+            'data' => new ExecutionResource($execution),
+        ]);
+    }
+
+    /** Live poll: current output while running, final result once it exits. */
+    public function pollInteractive(Execution $execution): JsonResponse
+    {
+        $this->authorize('view', $execution);
+
+        $result = $this->dockerService->pollInteractive($execution);
+        $this->service->applyInteractiveResult($execution, $result);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Interactive session polled',
+            'data' => new ExecutionResource($execution),
         ]);
     }
 

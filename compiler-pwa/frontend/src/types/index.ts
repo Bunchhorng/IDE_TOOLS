@@ -67,6 +67,9 @@ export interface Execution {
   file_id: number;
   language_id: number;
   status: ExecutionStatus;
+  interactive?: boolean;
+  /** Interactive-only: true once the sandbox has exited. */
+  interactive_finished?: boolean | null;
   source_code: string;
   stdin: string | null;
   stdout: string;
@@ -86,6 +89,12 @@ export interface ExecuteRequest {
   file_id: number;
   code: string;
   stdin?: string;
+  interactive?: boolean;
+}
+
+export interface InteractiveInputRequest {
+  line?: string;
+  close?: boolean;
 }
 
 export interface ApiResponse<T> {

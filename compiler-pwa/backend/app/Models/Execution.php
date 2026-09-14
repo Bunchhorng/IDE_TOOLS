@@ -26,6 +26,7 @@ class Execution extends Model
         'file_id',
         'language_id',
         'status',
+        'interactive',
         'source_code',
         'stdin',
         'stdout',
@@ -43,6 +44,7 @@ class Execution extends Model
         'exit_code' => 'integer',
         'execution_time' => 'float',
         'memory_usage' => 'integer',
+        'interactive' => 'boolean',
     ];
 
     public function user(): BelongsTo

@@ -2,6 +2,7 @@
 
 return [
     'timeout' => env('EXECUTION_TIMEOUT', 5),
+    'interactive_timeout' => env('EXECUTION_INTERACTIVE_TIMEOUT', 120),
     'memory_limit' => env('EXECUTION_MEMORY_LIMIT', '134217728'),
     'output_limit' => env('EXECUTION_OUTPUT_LIMIT', 1000000),
     'cpu_percent' => env('EXECUTION_CPU_PERCENT', 50),

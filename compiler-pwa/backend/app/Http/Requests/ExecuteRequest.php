@@ -19,6 +19,7 @@ class ExecuteRequest extends FormRequest
             'file_id' => ['nullable', 'integer', 'exists:files,id'],
             'code' => ['required', 'string', 'max:5242880'],
             'stdin' => ['nullable', 'string', 'max:5242880'],
+            'interactive' => ['sometimes', 'boolean'],
         ];
     }
 }

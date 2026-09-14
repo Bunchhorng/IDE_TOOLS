@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             'version' => 'GCC 13',
             'docker_image' => 'coderunner/c:latest',
             'compile_command' => 'gcc',
+            'compile_flags' => '-lm',
             'run_command' => './main',
             'filename_template' => 'main.c',
             'is_active' => true,
@@ -28,17 +29,20 @@ class DatabaseSeeder extends Seeder
             'version' => 'G++ 13',
             'docker_image' => 'coderunner/cpp:latest',
             'compile_command' => 'g++',
+            'compile_flags' => '-lm',
             'run_command' => './main',
             'filename_template' => 'main.cpp',
             'is_active' => true,
         ]);
 
-        Language::updateOrCreate(['slug' => 'python'], [
+Language::updateOrCreate(['slug' => 'python'], [
             'name' => 'Python',
-            'version' => '3.12',
+            'version' => 'Python 3',
             'docker_image' => 'coderunner/python:latest',
             'compile_command' => null,
+            'compile_flags' => null,
             'run_command' => 'python3 -u',
+            'syntax_check_command' => "python3 -c 'import ast,sys;ast.parse(open(sys.argv[1],encoding=\"utf-8\",errors=\"replace\").read())'",
             'filename_template' => 'main.py',
             'is_active' => true,
         ]);

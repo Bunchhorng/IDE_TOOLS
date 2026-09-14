@@ -31,7 +31,7 @@ export function BottomSheet({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[85] flex items-end justify-center sm:hidden">
+    <div className="fixed inset-0 z-[85] flex items-end justify-center lg:hidden">
       <div className="absolute inset-0 animate-cr-fade-in bg-ink/50 backdrop-blur-[2px]" onClick={onClose} aria-hidden="true" />
       <div
         role="dialog"

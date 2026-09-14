@@ -1,9 +1,24 @@
 import api from './api';
-import type { Execution, ExecuteRequest, ApiResponse } from '../types';
+import type { Execution, ExecuteRequest, InteractiveInputRequest, ApiResponse } from '../types';
 
 export const executionService = {
   async execute(data: ExecuteRequest): Promise<ApiResponse<Execution>> {
     const response = await api.post('/execute', data);
+    return response.data;
+  },
+
+  async startInteractive(id: number): Promise<ApiResponse<Execution>> {
+    const response = await api.post(`/executions/${id}/interactive/start`);
+    return response.data;
+  },
+
+  async sendInteractiveInput(id: number, data: InteractiveInputRequest): Promise<ApiResponse<Execution>> {
+    const response = await api.post(`/executions/${id}/interactive/input`, data);
+    return response.data;
+  },
+
+  async pollInteractive(id: number): Promise<ApiResponse<Execution>> {
+    const response = await api.get(`/executions/${id}/interactive`);
     return response.data;
   },
 

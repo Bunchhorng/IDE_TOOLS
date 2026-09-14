@@ -42,4 +42,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/executions', [ExecutionController::class, 'index']);
     Route::get('/executions/{execution}', [ExecutionController::class, 'show']);
     Route::delete('/executions/{execution}', [ExecutionController::class, 'destroy']);
+    Route::post('/executions/{execution}/interactive/start', [ExecutionController::class, 'startInteractive']);
+    Route::post('/executions/{execution}/interactive/input', [ExecutionController::class, 'provideInput']);
+    Route::get('/executions/{execution}/interactive', [ExecutionController::class, 'pollInteractive']);
 });

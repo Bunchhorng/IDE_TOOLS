@@ -38,6 +38,14 @@ interface TerminalPanelProps {
   onAllLinesCommitted?: () => void;
   /** Clear the terminal output and console history. */
   onClear?: () => void;
+  /** Live interactive session: accumulated stdout while the program waits for input. */
+  liveOutput?: string;
+  /** An interactive session is in flight — render live output + live input row. */
+  liveActive?: boolean;
+  /** Forward one typed line to the running program. */
+  onLiveSubmit?: (line: string) => void;
+  /** Stop the live session (kills the sandbox). */
+  onLiveStop?: () => void;
 }
 
 export type PanelTab = 'terminal' | 'output' | 'errors';
@@ -182,7 +190,7 @@ export interface TerminalPanelHandle {
 }
 
 export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>(
-  function TerminalPanel({ execution, isRunning, hasErrors, tab: externalTab, onTabChange, activeLanguage, fileContent, onGoToLine, onApplyFix, inputLines, onInputLinesChange, consoleRef, onFocusConsole, onInputReady, onAllLinesCommitted, onClear }, ref) {
+  function TerminalPanel({ execution, isRunning, hasErrors, tab: externalTab, onTabChange, activeLanguage, fileContent, onGoToLine, onApplyFix, inputLines, onInputLinesChange, consoleRef, onFocusConsole, onInputReady, onAllLinesCommitted, onClear, liveOutput, liveActive, onLiveSubmit, onLiveStop }, ref) {
   const internalConsoleRef = useRef<ConsoleInputHandle>(null);
   const consoleRefResolved = consoleRef ?? internalConsoleRef;
   const { t } = useI18n();
@@ -203,6 +211,47 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
     }),
     [consoleRefResolved, setTab],
   );
+
+  /** Live mode renders one continuous stream — program stdout interleaved
+   *  with the echoed input right after each prompt, like a real terminal. */
+  type LivePart = { text: string; kind: 'out' | 'in' };
+  const [liveParts, setLiveParts] = useState<LivePart[]>([]);
+  /** Amount of the latest liveOutput prop already replayed into liveParts. */
+  const consumedLenRef = useRef(0);
+
+  // Reset the transcript whenever a live session (re)starts.
+  useEffect(() => {
+    if (!liveActive) return;
+    const initial = liveOutput ?? '';
+    consumedLenRef.current = initial.length;
+    setLiveParts(initial ? [{ text: initial, kind: 'out' }] : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveActive]);
+
+  // Append only the NEW stdout since the last poll/submit.
+  useEffect(() => {
+    if (!liveActive) return;
+    const out = liveOutput ?? '';
+    if (out.length > consumedLenRef.current) {
+      const delta = out.slice(consumedLenRef.current);
+      consumedLenRef.current = out.length;
+      setLiveParts((prev) => (delta ? [...prev, { text: delta, kind: 'out' }] : prev));
+    }
+  }, [liveOutput, liveActive]);
+
+  /** Forward a typed line to the running program and echo it inline. */
+  const submitLive = (line: string) => {
+    setLiveParts((prev) => [...prev, { text: line + '\n', kind: 'in' }]);
+    onLiveSubmit?.(line);
+  };
+
+  /** Keep the caret visible: follow the stream as new output arrives. */
+  const liveScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!liveActive) return;
+    const el = liveScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [liveActive, liveParts]);
 
   const stdout = execution?.stdout ?? '';
   const stderr = execution?.stderr ?? '';
@@ -239,6 +288,18 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
       onInputReady?.();
     }
   }, [waitingForInput, consoleRefResolved, onInputReady]);
+
+  // Live interactive sessions: focus the console input right away and keep
+  // it focused as output streams in, so the user can type without clicking.
+  // onInputReady also pulls mobile back to a tab that shows the input row.
+  useEffect(() => {
+    if (!liveActive) return;
+    const timer = window.setTimeout(() => {
+      consoleRefResolved.current?.focus();
+      onInputReady?.();
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [liveActive, liveOutput, consoleRefResolved, onInputReady]);
 
   /** All prompts the program will print, in order. */
   const allPrompts = useMemo(
@@ -290,6 +351,18 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
           {effectiveStatus && (
             <StatusBadge status={effectiveStatus} className="mr-1 hidden sm:inline-flex" />
           )}
+          {liveActive && onLiveStop && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onLiveStop}
+              aria-label={t('terminal.stop_run')}
+              title={t('terminal.stop_run')}
+              className="text-error transition-colors hover:bg-error/10"
+            >
+              <Icon name="stop" size={15} />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -309,54 +382,77 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
       <div className="min-h-0 flex-1 overflow-hidden">
         {tab === 'terminal' ? (
           <div className="flex h-full min-h-0 flex-col">
-            <div className="min-h-0 flex-1 overflow-auto bg-editor px-4 py-3.5 font-mono text-[15px] leading-relaxed scrollbar-thin lg:px-4 lg:py-3 lg:text-[13px]">
-              {isRunning && (
+            <div ref={liveScrollRef} className="min-h-0 flex-1 overflow-auto bg-editor px-4 py-3.5 font-mono text-[15px] leading-relaxed scrollbar-thin lg:px-4 lg:py-3 lg:text-[13px]">
+              {isRunning && !liveActive && (
                 <div className="flex items-center gap-2 text-info">
                   <span className="h-3 w-3 animate-spin rounded-full border-2 border-info border-t-transparent" />
                   <span>{t('terminal.compiling')}</span>
                 </div>
               )}
 
-              {session ? (
-                <TerminalSession segments={session} />
-              ) : (
-                stdout && <pre className="whitespace-pre-wrap text-ink">{stdout}</pre>
-              )}
-
-              {stderr && !waitingForInput && (
-                <div className="mt-2">
-                  <BilingualErrorTitle
-                    status={effectiveStatus}
-                    line={explainError(stderr, execution?.status, activeLanguage ?? execution?.language?.slug)?.line}
-                    onGoToLine={onGoToLine}
-                  />
-                  <ErrorDetails
-                    execution={errorDetailsExecution}
-                    activeLanguage={activeLanguage}
-                    fileContent={fileContent}
-                    onGoToLine={onGoToLine}
-                    onApplyFix={onApplyFix}
-                    onFocusConsole={onFocusConsole}
+              {liveActive ? (
+                <div className="whitespace-pre-wrap text-ink">
+                  {liveParts.map((part, i) => (
+                    <span key={i}>{part.text}</span>
+                  ))}
+                  <ConsoleInput
+                    key="live-console"
+                    ref={consoleRef}
+                    code={fileContent ?? ''}
+                    language={activeLanguage ?? 'c'}
+                    lines={inputLines}
+                    onLinesChange={onInputLinesChange}
+                    running={false}
+                    disabled={false}
+                    echoFrom={0}
+                    live={onLiveSubmit ? { onSubmit: submitLive } : undefined}
                   />
                 </div>
-              )}
+              ) : (
+                <>
+                  {session ? (
+                    <TerminalSession segments={session} />
+                  ) : (
+                    stdout && <pre className="whitespace-pre-wrap text-ink">{stdout}</pre>
+                  )}
 
-              {/* Inline prompt: type right here in the terminal, like VS Code.
-                  The console stays empty until a run happens — the prompt row
-                  only appears once the program has run (and asks for input).
-                  Hidden while a run is in flight — only the spinner shows. */}
-              {!consoleHidden && !isRunning && !!execution && (
-                <ConsoleInput
-                  ref={consoleRef}
-                  code={fileContent ?? ''}
-                  language={activeLanguage ?? 'python'}
-                  lines={inputLines}
-                  onLinesChange={onInputLinesChange}
-                  running={isRunning}
-                  disabled={isRunning}
-                  echoFrom={session && !waitingForInput ? answeredCount : 0}
-                  onAllLinesCommitted={onAllLinesCommitted}
+                  {stderr && !waitingForInput && (
+                    <div className="mt-2">
+                      <BilingualErrorTitle
+                        status={effectiveStatus}
+                        line={explainError(stderr, execution?.status, activeLanguage ?? execution?.language?.slug)?.line}
+                        onGoToLine={onGoToLine}
+                      />
+                      <ErrorDetails
+                        execution={errorDetailsExecution}
+                        activeLanguage={activeLanguage}
+                        fileContent={fileContent}
+                        onGoToLine={onGoToLine}
+                        onApplyFix={onApplyFix}
+                        onFocusConsole={onFocusConsole}
+                      />
+                    </div>
+                  )}
+
+                  {/* Inline prompt: type right here in the terminal, like VS Code.
+                      The console stays empty until a run happens — the prompt row
+                      only appears once the program has run (and asks for input).
+                      Hidden while a run is in flight — only the spinner shows. */}
+                  {!consoleHidden && !isRunning && !!execution && (
+                    <ConsoleInput
+                      key="session-console"
+                      ref={consoleRef}
+                      code={fileContent ?? ''}
+                      language={activeLanguage ?? 'python'}
+                      lines={inputLines}
+                      onLinesChange={onInputLinesChange}
+                      running={isRunning}
+                      disabled={isRunning}
+                      echoFrom={session && !waitingForInput ? answeredCount : 0}
+                      onAllLinesCommitted={onAllLinesCommitted}
                 />
+              )}
+                </>
               )}
             </div>
           </div>
@@ -407,35 +503,57 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
             )}
           </div>
         ) : (
-          <div className="h-full overflow-auto bg-editor px-4 py-3 font-mono text-[15px] leading-relaxed scrollbar-thin lg:py-3 lg:text-[13px]">
-            {isRunning && (
+          <div ref={liveScrollRef} className="h-full overflow-auto bg-editor px-4 py-3 font-mono text-[15px] leading-relaxed scrollbar-thin lg:py-3 lg:text-[13px]">
+            {isRunning && !liveActive && (
               <div className="flex items-center gap-2 text-info">
                 <span className="h-3 w-3 animate-spin rounded-full border-2 border-info border-t-transparent" />
                 <span>{t('terminal.compiling')}</span>
               </div>
             )}
 
-            {stdout && (
-              <pre className="whitespace-pre-wrap text-ink">{stdout}</pre>
-            )}            {execution && !isRunning && sentStdin && (
-              <div className="mt-3 rounded-md border border-edge bg-raised/60 px-3 py-2 text-[12px] text-mute">
-                <span className="font-semibold text-faint">{t('terminal.input_label')}</span>
-                <span className="font-mono text-ink">{execution.stdin}</span>
+            {liveActive ? (
+              <div className="whitespace-pre-wrap text-ink">
+                {liveParts.map((part, i) => (
+                  <span key={i}>{part.text}</span>
+                ))}
+                <ConsoleInput
+                  key="live-console"
+                  ref={consoleRef}
+                  code={fileContent ?? ''}
+                  language={activeLanguage ?? 'c'}
+                  lines={inputLines}
+                  onLinesChange={onInputLinesChange}
+                  running={false}
+                  disabled={false}
+                  echoFrom={0}
+                  live={onLiveSubmit ? { onSubmit: submitLive } : undefined}
+                />
               </div>
-            )}
-
-            {execution && !isRunning && !sentStdin && allPrompts.length > 0 && (
-              <div className="mt-3 rounded-md border border-info/30 bg-info/10 px-3 py-2.5">
-                <div className="flex items-start gap-2">
-                  <Icon name="keyboard" size={15} className="mt-0.5 shrink-0 text-info" />
-                  <div className="text-[12px] leading-relaxed text-mute">
-                    <span className="font-semibold text-ink">{t('terminal.no_input')}</span>
-                    {' '}{t('terminal.add_input_tab')}
+            ) : (
+              <>
+                {stdout && (
+                  <pre className="whitespace-pre-wrap text-ink">{stdout}</pre>
+                )}
+                {execution && !isRunning && sentStdin && (
+                  <div className="mt-3 rounded-md border border-edge bg-raised/60 px-3 py-2 text-[12px] text-mute">
+                    <span className="font-semibold text-faint">{t('terminal.input_label')}</span>
+                    <span className="font-mono text-ink">{execution.stdin}</span>
                   </div>
-                </div>
-              </div>
-            )}
+                )}
 
+                {execution && !isRunning && !sentStdin && allPrompts.length > 0 && (
+                  <div className="mt-3 rounded-md border border-info/30 bg-info/10 px-3 py-2.5">
+                    <div className="flex items-start gap-2">
+                      <Icon name="keyboard" size={15} className="mt-0.5 shrink-0 text-info" />
+                      <div className="text-[12px] leading-relaxed text-mute">
+                        <span className="font-semibold text-ink">{t('terminal.no_input')}</span>
+                        {' '}{t('terminal.add_input_tab')}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
             </div>
         )}
       </div>

@@ -10,7 +10,7 @@ import { FileExplorerSidebar } from '../../components/FileExplorer/FileExplorerS
 import { TerminalPanel } from '../../components/Terminal/TerminalPanel';
 import type { PanelTab } from '../../components/Terminal/TerminalPanel';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
-import LanguageSelector from '../../components/LanguageSelector/LanguageSelector';
+import { LanguageIcon } from '../../components/LanguageIcon';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Button } from '../../components/ui/Button';
 import { BottomSheet } from '../../components/ui/BottomSheet';
@@ -20,7 +20,9 @@ import { useResizable } from '../../hooks/useResizable';
 import { useResizableX } from '../../hooks/useResizableX';
 import { cn } from '../../lib/cn';
 import { getTemplateContent } from '../../lib/templates';
+import { languageFromFilename } from '../../lib/languages';
 import { isInputStarved } from '../../lib/errorHints';
+import { codeNeedsInput } from '../../lib/needsInput';
 import { useTheme } from '../../context/ThemeContext';
 import { useToast } from '../../context/ToastContext';
 import { usePreferences } from '../../context/PreferencesContext';
@@ -57,6 +59,12 @@ export default function EditorPage() {
   const [execution, setExecution] = useState<Execution | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  /** Active interactive session: the sandbox id of the running program. */
+  const [liveSessionId, setLiveSessionId] = useState<number | null>(null);
+  /** Accumulated stdout of an interactive program between input deliveries. */
+  const [liveOutput, setLiveOutput] = useState('');
+  /** Mirror of liveOutput for the poll loop (avoid stale closures). */
+  const liveOutputRef = useRef('');
   const [mobileTab, setMobileTab] = useState<MobileTab>('code');
   const [terminalTab, setTerminalTab] = useState<PanelTab>('terminal');
   const [moreOpen, setMoreOpen] = useState(false);
@@ -71,6 +79,21 @@ export default function EditorPage() {
   const isRunningRef = useRef(false);
   /** True when a run ended starved of input — the next committed line re-runs. */
   const awaitingInputRef = useRef(false);
+  /** Mirror of `dirty` for the beforeunload guard. */
+  const dirtyRef = useRef(false);
+  /** True while an interactive session is in flight (used by cleanups). */
+  const liveActiveRef = useRef(false);
+  /** Interactive session id for the poll loop / submit / stop. */
+  const liveSessionIdRef = useRef<number | null>(null);
+  /** Mirror of the echoed input lines (used by the poll stop/finish finalizers). */
+  const inputLinesRef = useRef<string[]>([]);
+  /** Poll handle for live interactive sessions — cleared on finish/stop/unmount. */
+  const pollTimerRef = useRef<number | null>(null);
+  /** Bumped on every begin/abort so stale async finalizers can't clobber the
+      terminal after a stop, file switch, or new run. */
+  const sessionTokenRef = useRef(0);
+  /** Mirror of interactive-eligible for the stale-safe auto-run guard. */
+  const interactiveEligibleRef = useRef(false);
   const panel = useResizable({ initial: 240, min: 80 });
   const sidebar = useResizableX({ initial: 240, min: 140 });
 
@@ -91,6 +114,20 @@ export default function EditorPage() {
         !!execution.stderr),
     [execution, inputStarved],
   );
+
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
 
   /** Open tabs in display order (project files still visible in the explorer). */
   const openFiles = useMemo(() => {
@@ -156,6 +193,25 @@ export default function EditorPage() {
 
   const selectedLanguage = activeFile?.language ?? languages[0]?.slug ?? 'cpp';
 
+  /** C/C++/Python programs that read input run live: the sandbox keeps running
+   *  and each answer is delivered one line at a time, so menu loops work. */
+  const interactiveEligible = useMemo(
+    () =>
+      (activeFile?.language === 'c' ||
+        activeFile?.language === 'cpp' ||
+        activeFile?.language === 'python') &&
+      codeNeedsInput(activeFile?.content ?? '', activeFile?.language),
+    [activeFile?.content, activeFile?.language],
+  );
+
+  useEffect(() => {
+    interactiveEligibleRef.current = interactiveEligible;
+  }, [interactiveEligible]);
+
+  useEffect(() => {
+    inputLinesRef.current = inputLines;
+  }, [inputLines]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -187,8 +243,10 @@ export default function EditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFile?.content, activeFile?.language, prefs.autoSave, dirty]);
 
-  const handleSave = async () => {
-    if (!activeFile || !dirty) return;
+  /** Persist the active file. Returns false on failure so callers can stop a
+   *  tab switch / close — otherwise unsaved edits would silently be dropped. */
+  const handleSave = async (): Promise<boolean> => {
+    if (!activeFile || !dirty) return true;
     setIsSaving(true);
     try {
       const response = await fileService.update(activeFile.id, {
@@ -199,9 +257,11 @@ export default function EditorPage() {
       setFiles((fs) => fs.map((f) => (f.id === activeFile.id ? { ...f, content: response.data.content, language: response.data.language, updated_at: response.data.updated_at } : f)));
       setSavedContent(response.data.content);
       setSavedLanguage(response.data.language);
+      return true;
     } catch (err) {
-      // No popup: the top bar keeps showing "Unsaved changes" as the signal.
       console.error('Save failed', err);
+      toast.error(t('toast.save_failed'), t('toast.check_connection'));
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -213,8 +273,179 @@ export default function EditorPage() {
    * cover every input the program asks for — nothing runs early here.
    */
   const handleInputLinesChange = useCallback((lines: string[]) => {
+    inputLinesRef.current = lines;
     setInputLines(lines);
     setStdin(lines.join('\n'));
+  }, []);
+
+  /** End an interactive session and surface the final record. Called by the
+   *  poll loop when the sandbox exits on its own (program finished). Ignored
+   *  if a newer session/abort bumped the token (stale continuation). */
+  const finishLive = (id: number, exec: Execution, token: number) => {
+    if (id !== liveSessionIdRef.current || token !== sessionTokenRef.current) return;
+    if (pollTimerRef.current) {
+      window.clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    const finished = {
+      ...exec,
+      interactive: true,
+      stdin:
+        inputLinesRef.current.length > 0 ? inputLinesRef.current.join('\n') : null,
+    };
+    liveActiveRef.current = false;
+    liveSessionIdRef.current = null;
+    setLiveSessionId(null);
+    setLiveOutput('');
+    liveOutputRef.current = '';
+    setExecution(finished);
+    isRunningRef.current = false;
+    setIsRunning(false);
+  };
+
+  /** Begin a live interactive session: show live output and poll the sandbox
+   *  until the program exits on its own. */
+  const beginLive = (exec: Execution) => {
+    const token = ++sessionTokenRef.current;
+    liveSessionIdRef.current = exec.id;
+    liveActiveRef.current = true;
+    setLiveSessionId(exec.id);
+    setExecution(null);
+    setLiveOutput(exec.stdout ?? '');
+    liveOutputRef.current = exec.stdout ?? '';
+    const id = exec.id;
+    pollTimerRef.current = window.setInterval(() => {
+      void pollLoop(id, token);
+    }, 500);
+  };
+
+  /** Poll the running session: refresh live output, finalize when it exits. */
+  const pollLoop = async (id: number, token: number) => {
+    if (!liveActiveRef.current || token !== sessionTokenRef.current) return;
+    try {
+      const res = await executionService.pollInteractive(id);
+      if (!liveActiveRef.current || token !== sessionTokenRef.current) return;
+      const exec = res.data;
+      const out = exec.stdout ?? '';
+      if (out !== liveOutputRef.current) {
+        liveOutputRef.current = out;
+      }
+      setLiveOutput(out);
+      if (exec.interactive_finished) finishLive(id, exec, token);
+    } catch {
+      /* transient network error — keep polling; the sandbox session cap ends it */
+    }
+  };
+
+  /** Forward one typed line (Enter) to the running program. */
+  const handleLiveSubmit = useCallback(async (line: string) => {
+    const id = liveSessionIdRef.current;
+    if (id == null || !liveActiveRef.current) return;
+    const token = sessionTokenRef.current;
+    try {
+      const res = await executionService.sendInteractiveInput(id, { line });
+      if (!liveActiveRef.current || token !== sessionTokenRef.current) return;
+      const exec = res.data;
+      setLiveOutput(exec.stdout ?? '');
+      liveOutputRef.current = exec.stdout ?? '';
+      if (exec.interactive_finished) finishLive(id, exec, token);
+    } catch {
+      /* ignore — polling continues the session */
+    }
+  }, []);
+
+  /** Stop the live session. With finalize, the final record is surfaced from
+   *  the sandbox's close response; abort mode (file switch / clear) only
+   *  kills the sandbox and leaves the terminal to the caller. */
+  const stopLiveSession = useCallback(
+    (finalize = true) => {
+      const token = ++sessionTokenRef.current;
+      liveActiveRef.current = false;
+      if (pollTimerRef.current) {
+        window.clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      const id = liveSessionIdRef.current;
+      liveSessionIdRef.current = null;
+      setLiveSessionId(null);
+      setLiveOutput('');
+      liveOutputRef.current = '';
+      if (id == null) {
+        if (isRunningRef.current) {
+          isRunningRef.current = false;
+          setIsRunning(false);
+        }
+        return;
+      }
+      if (!finalize) {
+        void executionService
+          .sendInteractiveInput(id, { close: true })
+          .catch(() => undefined);
+        if (isRunningRef.current) {
+          isRunningRef.current = false;
+          setIsRunning(false);
+        }
+        return;
+      }
+      void (async () => {
+        try {
+          const res = await executionService.sendInteractiveInput(id, { close: true });
+          if (token !== sessionTokenRef.current || !isRunningRef.current) return;
+          const exec = res.data;
+          if (exec) {
+            setExecution({
+              ...exec,
+              interactive: true,
+              stdin:
+                inputLinesRef.current.length > 0
+                  ? inputLinesRef.current.join('\n')
+                  : null,
+            });
+          }
+          isRunningRef.current = false;
+          setIsRunning(false);
+        } catch {
+          if (token !== sessionTokenRef.current || !isRunningRef.current) return;
+          setExecution({
+            id: id,
+            user_id: project?.user_id ?? 0,
+            project_id: project?.id ?? 0,
+            file_id: activeFile?.id ?? 0,
+            language_id: 0,
+            status: 'system_error',
+            source_code: '',
+            stdin:
+              inputLinesRef.current.length > 0
+                ? inputLinesRef.current.join('\n')
+                : null,
+            stdout: '',
+            stderr: t('toast.couldnt_run'),
+            exit_code: null,
+            execution_time: null,
+            memory_usage: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          isRunningRef.current = false;
+          setIsRunning(false);
+        }
+      })();
+    },
+    [project?.id, project?.user_id, activeFile?.id, t],
+  );
+
+  /** Stop the sandbox when the editor unmounts (never leave a container running). */
+  useEffect(() => {
+    const wasLive = liveActiveRef.current;
+    const id = liveSessionIdRef.current;
+    if (wasLive && id != null) {
+      void executionService.sendInteractiveInput(id, { close: true }).catch(() => undefined);
+    }
+    if (pollTimerRef.current) {
+      window.clearInterval(pollTimerRef.current);
+    }
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**
@@ -227,6 +458,9 @@ export default function EditorPage() {
   const handleAllLinesCommitted = useCallback(() => {
     window.setTimeout(() => {
       if (isRunningRef.current) return;
+      // Interactive C/C++/Python programs take answers live (started via Run) —
+      // the last typed line must NOT fire a batch run.
+      if (interactiveEligibleRef.current) return;
       const continueSession = awaitingInputRef.current;
       awaitingInputRef.current = false;
       void handleRunRef.current(continueSession);
@@ -239,12 +473,54 @@ export default function EditorPage() {
     // yields, so the isRunningRef check alone is not enough.
     if (isRunningRef.current) return;
     isRunningRef.current = true;
+    // Any run invalidates in-flight live-session finalizers (e.g. a Stop
+    // confirmation arriving after the user already reran or switched file).
+    sessionTokenRef.current += 1;
     if (
       window.matchMedia('(max-width: 1023px)').matches &&
       (mobileTab === 'files' || mobileTab === 'more')
     ) {
       setMobileTab('code');
     }
+
+    // Interactive C/C++/Python with input reads: keep the sandbox running and
+    // send answers one line at a time, so menu loops and multi-step prompts work.
+    if (interactiveEligible && !continueSession) {
+      try {
+        if (dirty) await handleSave();
+        setIsRunning(true);
+        setExecution(null);
+        setLiveOutput('');
+        const created = await executionService.execute({
+          language: selectedLanguage,
+          project_id: project.id,
+          file_id: activeFile.id,
+          code: activeFile.content,
+          stdin: '',
+          interactive: true,
+        });
+        const started = await executionService.startInteractive(created.data.id);
+        const exec = started.data;
+        if (!exec) throw new Error('Missing execution data');
+        if (exec.interactive_finished) {
+          // Finished instantly (e.g. a compile/syntax error) — surface the
+          // result and release the running guard (we never entered a session).
+          isRunningRef.current = false;
+          setIsRunning(false);
+          setExecution(exec);
+          return;
+        }
+        beginLive(exec);
+      } catch (err) {
+        console.error('Interactive run failed, falling back to batch', err);
+        // Release the guard, then degrade to the normal batch path.
+        isRunningRef.current = false;
+        setIsRunning(false);
+        await handleRunRef.current(false);
+      }
+      return;
+    }
+
     // Flush any uncommitted console input so the last typed line is included.
     const finalStdin = consoleRef.current?.flushPending() ?? stdin;
     if (finalStdin !== stdin) setStdin(finalStdin);
@@ -328,6 +604,7 @@ export default function EditorPage() {
 
   /** Wipe the terminal: past output, errors, and any typed input. */
   const handleClearTerminal = () => {
+    stopLiveSession(false);
     setExecution(null);
     setStdin('');
     setInputLines([]);
@@ -353,12 +630,15 @@ export default function EditorPage() {
 
   const handleSelectFile = async (file: File) => {
     if (activeFile && activeFile.id !== file.id && dirty) {
-      await handleSave();
+      // Don't switch away if the save fails — the edits would be lost.
+      const saved = await handleSave();
+      if (!saved) return;
     }
     setOpenFileIds((ids) => (ids.includes(file.id) ? ids : [...ids, file.id]));
     setActiveFile(file);
     setSavedContent(file.content);
     setSavedLanguage(file.language);
+    stopLiveSession(false);
     setExecution(null);
     // Fresh console session for the new file.
     setInputLines([]);
@@ -369,7 +649,10 @@ export default function EditorPage() {
   const handleCloseTab = (file: File) => {
     void (async () => {
       // Flush unsaved edits for the closing file before it leaves the editor.
-      if (file.id === activeFile?.id && dirty) await handleSave();
+      if (file.id === activeFile?.id && dirty) {
+        const saved = await handleSave();
+        if (!saved) return;
+      }
       const remaining = openFileIds.filter((id) => id !== file.id);
       setOpenFileIds(remaining);
       if (activeFile?.id === file.id) {
@@ -377,6 +660,7 @@ export default function EditorPage() {
         setActiveFile(nextFile);
         setSavedContent(nextFile ? nextFile.content : '');
         setSavedLanguage(nextFile ? nextFile.language : 'cpp');
+        stopLiveSession(false);
         setExecution(null);
         setInputLines([]);
         setStdin('');
@@ -393,7 +677,10 @@ export default function EditorPage() {
   const handleCreateFile = (filename: string, language: string, folderId: number | null = null, content?: string) => {
     void (async () => {
       try {
-        if (activeFile && dirty) await handleSave();
+        if (activeFile && dirty) {
+          const saved = await handleSave();
+          if (!saved) return;
+        }
         const response = await fileService.create(pId, {
           folder_id: folderId,
           filename,
@@ -476,12 +763,23 @@ export default function EditorPage() {
   const handleRenameFile = (file: File, newName: string) => {
     void (async () => {
       try {
-        const response = await fileService.update(file.id, { filename: newName });
+        // A rename that swaps the extension should switch the language too,
+        // otherwise Run feeds the file to the wrong compiler.
+        const desiredLanguage = languageFromFilename(newName);
+        const response = await fileService.update(file.id, {
+          filename: newName,
+          ...(desiredLanguage !== file.language ? { language: desiredLanguage } : {}),
+        });
         // Only take the fields the rename actually changed from the server so
         // unsaved local content/language edits are never clobbered.
-        const patch = { filename: response.data.filename, updated_at: response.data.updated_at };
+        const patch = {
+          filename: response.data.filename,
+          language: response.data.language,
+          updated_at: response.data.updated_at,
+        };
         setFiles((fs) => fs.map((f) => (f.id === file.id ? { ...f, ...patch } : f)));
         setActiveFile((f) => (f?.id === file.id ? { ...f, ...patch } : f));
+        if (activeFile?.id === file.id) setSavedLanguage(response.data.language);
         toast.success(t('toast.renamed'), newName);
       } catch {
         toast.error(t('toast.failed_rename_file'));
@@ -577,6 +875,7 @@ export default function EditorPage() {
     <div className="flex h-dvh flex-col bg-page text-ink">
       <EditorTopBar
         projectName={project?.name ?? null}
+        fileName={activeFile?.filename}
         isSaving={isSaving}
         dirty={dirty}
         running={isRunning}
@@ -613,13 +912,14 @@ export default function EditorPage() {
             onMoveFile={handleMoveFile}
             onMoveFolder={handleMoveFolder}
           />
-          <button
-            type="button"
-            onMouseDown={sidebar.onMouseDown}
-            onClick={sidebar.toggle}
-            className="absolute inset-y-0 -right-1 z-10 w-2.5 cursor-col-resize transition-colors hover:bg-primary/40"
-            aria-label="Resize sidebar"
-          />
+<button
+              type="button"
+              onMouseDown={sidebar.onMouseDown}
+              onTouchStart={sidebar.onTouchStart}
+              onClick={sidebar.onClick}
+              className="absolute inset-y-0 -right-1 z-10 w-2.5 cursor-col-resize touch-none transition-colors hover:bg-primary/40"
+              aria-label="Resize sidebar"
+            />
         </aside>
 
         {mobileTab === 'files' && (
@@ -687,8 +987,9 @@ export default function EditorPage() {
               <button
                 type="button"
                 onMouseDown={panel.onMouseDown}
-                onClick={panel.toggle}
-                className="flex h-3 w-full shrink-0 cursor-row-resize items-center justify-center bg-edge/40 transition-colors hover:bg-primary/30"
+                onTouchStart={panel.onTouchStart}
+                onClick={panel.onClick}
+                className="flex h-3 w-full shrink-0 cursor-row-resize touch-none items-center justify-center bg-edge/40 transition-colors hover:bg-primary/30"
                 aria-label="Resize terminal"
               >
                 <span className="h-0.5 w-8 rounded-full bg-faint/50 transition-colors group-hover/panel:bg-primary/70" />
@@ -709,9 +1010,13 @@ export default function EditorPage() {
                   onInputLinesChange={handleInputLinesChange}
                   consoleRef={consoleRef}
                   onFocusConsole={handleFocusConsole}
-                  onInputReady={handleInputReady}
+onInputReady={handleInputReady}
                   onAllLinesCommitted={handleAllLinesCommitted}
                   onClear={handleClearTerminal}
+                  liveOutput={liveOutput}
+                  liveActive={liveSessionId !== null}
+                  onLiveSubmit={handleLiveSubmit}
+                  onLiveStop={() => stopLiveSession()}
                 />
               </div>
             </div>
@@ -738,6 +1043,10 @@ export default function EditorPage() {
               onInputReady={handleInputReady}
               onAllLinesCommitted={handleAllLinesCommitted}
               onClear={handleClearTerminal}
+              liveOutput={liveOutput}
+              liveActive={liveSessionId !== null}
+              onLiveSubmit={handleLiveSubmit}
+              onLiveStop={() => stopLiveSession()}
             />
           </main>
         )}
@@ -758,7 +1067,7 @@ export default function EditorPage() {
         <button
           onClick={() => void handleRun()}
           disabled={isRunning}
-          className="fixed bottom-20 right-4 z-40 flex h-13 w-13 items-center justify-center rounded-full bg-primary text-white shadow-fab transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-60 lg:hidden"
+          className="cr-btn-run fixed bottom-20 right-4 z-40 flex h-13 w-13 items-center justify-center rounded-full text-white transition-all active:scale-95 disabled:opacity-60 lg:hidden"
           aria-label="Run code"
         >
           {isRunning ? (
@@ -802,13 +1111,31 @@ export default function EditorPage() {
       <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)} title={t('editor.options')}>
         <div className="flex flex-col gap-1.5">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">{t('editor.language')}</p>
-          <div className="rounded-lg border border-edge p-1">
-            <LanguageSelector
-              languages={languages}
-              selected={selectedLanguage}
-              onChange={handleLanguageChange}
-              align="right"
-            />
+          <div className="flex flex-col gap-1">
+            {languages.map((lang) => {
+              const active = lang.slug === selectedLanguage;
+              const glyph =
+                lang.slug === 'python' ? ('python' as const) : lang.slug === 'c' ? ('c' as const) : ('cpp' as const);
+              return (
+                <button
+                  key={lang.id}
+                  onClick={() => handleLanguageChange(lang.slug)}
+                  className={cn(
+                    'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors',
+                    active ? 'bg-primary/10' : 'hover:bg-raised',
+                  )}
+                >
+                  <LanguageIcon lang={glyph} size="sm" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-medium text-ink">{lang.name}</span>
+                    <span className="block text-[11px] text-faint">
+                      {lang.compile_command ? `${lang.compile_command} compiler` : `${lang.run_command} runtime`}
+                    </span>
+                  </span>
+                  {active && <Icon name="check" size={16} className="shrink-0 text-primary" />}
+                </button>
+              );
+            })}
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <Button variant="secondary" onClick={() => void handleSave()} disabled={!activeFile}>

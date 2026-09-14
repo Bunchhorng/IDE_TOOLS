@@ -31,7 +31,7 @@ function applyToDom(theme: ThemeMode) {
   document.documentElement.classList.toggle('dark', theme === 'dark');
   document.documentElement.classList.toggle('light', theme === 'light');
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', theme === 'dark' ? '#0b1120' : '#f7f9fc');
+  if (meta) meta.setAttribute('content', theme === 'dark' ? '#0b1120' : '#f5f7fb');
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

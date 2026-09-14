@@ -26,6 +26,8 @@
   --shadow-card-hover: 0 6px 24px rgb(15 23 42 / 0.08);
   --shadow-pop: 0 8px 30px rgb(15 23 42 / 0.14);
   --shadow-fab: 0 8px 24px rgb(37 99 235 / 0.35);
+  --shadow-glow: 0 1px 2px rgb(0 0 0 / 0.14), 0 6px 18px -6px color-mix(in srgb, var(--primary) 45%, transparent);
+  --shadow-glow-hover: 0 2px 4px rgb(0 0 0 / 0.16), 0 10px 26px -8px color-mix(in srgb, var(--primary) 60%, transparent);
 }
 
 /* Runtime-semantic tokens that flip between light & dark. */
@@ -44,17 +46,17 @@
 }
 
 :root {
-  --page: #f7f9fc;
+  --page: #f5f7fb;
   --panel: #ffffff;
-  --raised: #eef2f7;
+  --raised: #ebeef4;
   --editor: #ffffff;
-  --edge: #e4e8ef;
-  --edge-strong: #cdd5e0;
-  --ink: #0f172a;
-  --mute: #5b6b81;
-  --faint: #94a3b8;
+  --edge: #d9e0ea;
+  --edge-strong: #c0c9d8;
+  --ink: #0c1222;
+  --mute: #4a5772;
+  --faint: #7e8da5;
   --primary: #2563eb;
-  --primary-hover: #1e40af;
+  --primary-hover: #1d4ed8;
 }
 
 .dark {
@@ -65,7 +67,7 @@
   --edge: #233049;
   --edge-strong: #33415f;
   --ink: #e6eaf2;
-  --mute: #9aa6bd;
+  --mute: #98a6c0;
   --faint: #6d7a93;
   --primary: #3b82f6;
   --primary-hover: #2563eb;
@@ -151,6 +153,31 @@
   }
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+@layer components {
+  /* Primary "Run" action — a subtle blue→indigo gradient with a soft glow. */
+  .cr-btn-run {
+    background-image: linear-gradient(135deg, var(--primary) 0%, #4f46e5 115%);
+    box-shadow: var(--shadow-glow);
+  }
+  .cr-btn-run:hover:not(:disabled) {
+    filter: brightness(1.07);
+    box-shadow: var(--shadow-glow-hover);
+  }
+  .cr-btn-run:active:not(:disabled) {
+    filter: brightness(0.97);
+  }
+  .cr-btn-run:disabled {
+    filter: saturate(0.35);
+    box-shadow: none;
+  }
+
+  /* Small brand plate used in the editor top bar. */
+  .cr-brand-plate {
+    background-image: linear-gradient(135deg, var(--primary) 0%, #4f46e5 115%);
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.18), 0 4px 12px -4px color-mix(in srgb, var(--primary) 50%, transparent);
   }
 }
 

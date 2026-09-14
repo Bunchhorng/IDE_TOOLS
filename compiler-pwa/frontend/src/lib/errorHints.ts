@@ -351,8 +351,8 @@ export function isInputStarved(stderr: string | null | undefined): boolean {
 /** Fallback hints keyed by execution status (used when stderr is empty or unrecognized). */
 const STATUS_HINTS: Partial<Record<ExecutionStatus, { en: string; km: string }>> = {
   timeout: {
-    en: 'The program exceeded the time limit (5 s). Look for an infinite loop, or input the program is waiting for that was never provided.',
-    km: 'កម្មវិធីហួសពេលកំណត់ (5 វិនាទី)។ សូមរកមើល loop ដែលមិនចប់ ឬការរង់ចាំទិន្នន័យបញ្ចូលដែលមិនបានផ្តល់។',
+    en: 'The program exceeded the time limit. Look for an infinite loop, or input the program is waiting for that was never provided. If the program reads input, type every answer and press Enter — the program keeps running between entries.',
+    km: 'កម្មវិធីហួសពេលកំណត់។ សូមរកមើល loop ដែលមិនចប់ ឬការរង់ចាំទិន្នន័យបញ្ចូលដែលមិនបានផ្តល់។ ប្រសិនបើកម្មវិធីអានទិន្នន័យបញ្ចូល សូមវាយចម្លើយនីមួយៗរួចចុច Enter — កម្មវិធីនៅតែដំណើរការរវាងពេលបញ្ចូលនីមួយៗ។',
   },
   memory_limit: {
     en: 'The program used more memory than allowed (128 MB). Avoid very large arrays, strings or unbounded growth.',

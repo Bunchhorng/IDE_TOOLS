@@ -34,7 +34,7 @@ export function Tabs<V extends string>({
             onClick={() => onChange(tab.value)}
             className={cn(
               'relative flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors',
-              active ? 'text-primary' : 'text-mute hover:bg-raised hover:text-ink',
+              active ? 'bg-primary/10 text-primary' : 'text-mute hover:bg-raised hover:text-ink',
             )}
           >
             {tab.icon && (

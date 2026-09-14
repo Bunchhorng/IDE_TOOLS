@@ -15,6 +15,8 @@ class Language extends Model
         'version',
         'docker_image',
         'compile_command',
+        'compile_flags',
+        'syntax_check_command',
         'run_command',
         'filename_template',
         'is_active',

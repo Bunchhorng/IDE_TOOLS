@@ -4,7 +4,11 @@ import { Icon } from '../ui/Icon';
 import { Dropdown, type MenuItem } from '../ui/Dropdown';
 import { EmptyState } from '../ui/EmptyState';
 import { LanguageIcon } from '../LanguageIcon';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { BottomSheet } from '../ui/BottomSheet';
 import { iconForFile } from '../../lib/languages';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { File, Folder } from '../../types';
 
 interface FileExplorerSidebarProps {
@@ -25,12 +29,39 @@ interface FileExplorerSidebarProps {
 
 type CreateMode = { kind: 'file' | 'folder'; parentId: number | null } | null;
 type RenameMode = { kind: 'file' | 'folder'; id: number; value: string } | null;
+type SheetMode =
+  | { kind: 'file' | 'folder'; mode: 'create'; parentId: number | null }
+  | { kind: 'file' | 'folder'; mode: 'rename'; node: File | Folder }
+  | { kind: 'file' | 'folder'; mode: 'move'; node: File | Folder }
+  | null;
 
 interface MoveTarget {
   label: string;
   id: number | null;
   isRoot?: boolean;
   current: boolean;
+}
+
+const FILE_LANGS = [
+  { slug: 'c', label: 'C' },
+  { slug: 'cpp', label: 'C++' },
+  { slug: 'python', label: 'Python' },
+] as const;
+
+type FileLang = (typeof FILE_LANGS)[number]['slug'];
+
+const FILE_EXT: Record<FileLang, string> = { c: 'c', cpp: 'cpp', python: 'py' };
+const KNOWN_EXT = /\.(c|cpp|cc|cxx|py|pyw)$/i;
+
+/** Append the extension for a language when a filename lacks one. */
+function withExtension(name: string, lang: FileLang): string {
+  return KNOWN_EXT.test(name) ? name : `${name}.${FILE_EXT[lang]}`;
+}
+
+/** Swap a known extension when switching the selected language. */
+function swapExtension(name: string, lang: FileLang): string {
+  const base = name.replace(KNOWN_EXT, '');
+  return base.trim() ? `${base}.${FILE_EXT[lang]}` : name;
 }
 
 function languageForName(name: string): string {
@@ -53,10 +84,16 @@ export function FileExplorerSidebar({
   onMoveFile,
   onMoveFolder,
 }: FileExplorerSidebarProps) {
+  const isMobile = useMediaQuery('(max-width: 1023px)');
+
   const [creating, setCreating] = useState<CreateMode>(null);
   const [newName, setNewName] = useState('');
   const [renaming, setRenaming] = useState<RenameMode>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [sheet, setSheet] = useState<SheetMode>(null);
+  const [sheetName, setSheetName] = useState('');
+  const [sheetLang, setSheetLang] = useState<FileLang>('cpp');
+  const [menuSheet, setMenuSheet] = useState<{ kind: 'file' | 'folder'; node: File | Folder } | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const expandedSeededRef = useRef(false);
 
@@ -143,9 +180,28 @@ export function FileExplorerSidebar({
 
   const startCreate = (kind: 'file' | 'folder', parentId: number | null) => {
     if (parentId) setExpanded((prev) => new Set(prev).add(parentId));
-    setCreating({ kind, parentId });
-    setNewName('');
-    setRenaming(null);
+    if (isMobile) {
+      setSheetName('');
+      setSheetLang('cpp');
+      setSheet({ kind, mode: 'create', parentId });
+      setCreating(null);
+      setRenaming(null);
+    } else {
+      setCreating({ kind, parentId });
+      setNewName('');
+      setRenaming(null);
+    }
+  };
+
+  const startRename = (kind: 'file' | 'folder', node: File | Folder) => {
+    if (isMobile) {
+      setSheetName(kind === 'file' ? (node as File).filename : (node as Folder).name);
+      setSheet({ kind, mode: 'rename', node });
+      setCreating(null);
+      setRenaming(null);
+    } else {
+      setRenaming({ kind, id: node.id, value: kind === 'file' ? (node as File).filename : (node as Folder).name });
+    }
   };
 
   const submitCreate = () => {
@@ -169,6 +225,108 @@ export function FileExplorerSidebar({
     }
     setRenaming(null);
   };
+
+  const clearSheet = () => {
+    setSheet(null);
+    setSheetName('');
+  };
+
+  const submitSheet = () => {
+    if (!sheet || sheet.mode === 'move') return;
+    const name = sheetName.trim();
+    if (!name) return;
+    if (sheet.mode === 'create') {
+      if (sheet.kind === 'file') {
+        onCreateFile(withExtension(name, sheetLang), sheetLang, sheet.parentId);
+      } else {
+        onCreateFolder(name, sheet.parentId);
+      }
+    } else {
+      const node = sheet.node;
+      const current = sheet.kind === 'file' ? (node as File).filename : (node as Folder).name;
+      if (name !== current) {
+        if (sheet.kind === 'file') onRenameFile(node as File, name);
+        else onRenameFolder(node as Folder, name);
+      }
+    }
+    clearSheet();
+  };
+
+  /** Context-menu actions for any file/folder row. */
+  const buildMenuItems = (kind: 'file' | 'folder', node: File | Folder): MenuItem[] => {
+    const items: MenuItem[] =
+      kind === 'folder'
+        ? [
+            { key: 'new-file', label: 'New file', icon: 'filePlus', onSelect: () => startCreate('file', (node as Folder).id) },
+            {
+              key: 'new-folder',
+              label: 'New subfolder',
+              icon: 'folderPlus',
+              onSelect: () => startCreate('folder', (node as Folder).id),
+            },
+          ]
+        : [];
+
+    items.push({ key: 'rename', label: 'Rename', icon: 'pencil', onSelect: () => startRename(kind, node) });
+
+    if (isMobile) {
+      items.push({ key: 'move', label: 'Move to…', icon: 'folder', onSelect: () => setSheet({ kind, mode: 'move', node }) });
+    } else {
+      items.push({ key: 'move-head', label: 'Move to…', icon: 'folder', onSelect: () => {} });
+      for (const t of moveTargets(kind, node)) {
+        items.push({
+          key: `move-${kind}-${t.id ?? 'root'}`,
+          label: t.label,
+          icon: 'folder',
+          disabled: t.current,
+          onSelect: () => {
+            if (kind === 'file') onMoveFile(node as File, t.id);
+            else onMoveFolder(node as Folder, t.id);
+          },
+        });
+      }
+    }
+
+    items.push({
+      key: 'delete',
+      label: 'Delete',
+      icon: 'trash',
+      danger: true,
+      onSelect: () => {
+        if (kind === 'file') onDeleteFile(node as File);
+        else onDeleteFolder(node as Folder);
+      },
+    });
+
+    return items;
+  };
+
+  /** Context-menu trigger: bottom sheet on phones, anchored popup on desktop. */
+  const rowMenu = (kind: 'file' | 'folder', node: File | Folder, label: string) =>
+    isMobile ? (
+      <button
+        type="button"
+        aria-label={`Options for ${label}`}
+        onClick={() => setMenuSheet({ kind, node })}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-faint transition-colors hover:text-ink active:bg-raised lg:h-6 lg:w-6"
+      >
+        <Icon name="moreV" size={17} />
+      </button>
+    ) : (
+      <Dropdown
+        align="right"
+        trigger={
+          <button
+            type="button"
+            aria-label={`Options for ${label}`}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-faint transition-colors hover:text-ink active:bg-raised lg:h-6 lg:w-6"
+          >
+            <Icon name="moreV" size={14} />
+          </button>
+        }
+        items={buildMenuItems(kind, node)}
+      />
+    );
 
   const renderFile = (file: File, depth: number) => {
     const active = file.id === activeFileId;
@@ -198,65 +356,25 @@ export function FileExplorerSidebar({
       );
     }
 
-    const moveHeading: MenuItem = {
-      key: 'move-head',
-      label: 'Move to…',
-      icon: 'folder',
-      onSelect: () => {},
-    };
-    const moveItems: MenuItem[] = moveTargets('file', file).map((t) => ({
-      key: `move-file-${t.id ?? 'root'}`,
-      label: t.label,
-      icon: 'folder',
-      disabled: t.current,
-      onSelect: () => onMoveFile(file, t.id),
-    }));
-
     return (
       <li key={file.id}>
-        <Dropdown
-          align="right"
-          trigger={
-            <button
-              onClick={() => onSelectFile(file)}
-              className={cn(
-                'group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors',
-                active
-                  ? 'bg-primary/10 font-medium text-ink'
-                  : 'text-mute hover:bg-raised hover:text-ink',
-              )}
-              style={{ paddingLeft: `${depth * 14 + 8}px` }}
-            >
-              <LanguageIcon lang={iconForFile(file.filename)} size="sm" />
-              <span className="min-w-0 flex-1 truncate text-left">{file.filename}</span>
-              <span
-                className={cn(
-                  'shrink-0 text-faint transition-colors group-hover:text-ink',
-                  active && 'text-mute',
-                )}
-              >
-                <Icon name="moreV" size={14} />
-              </span>
-            </button>
-          }
-          items={[
-            {
-              key: 'rename',
-              label: 'Rename',
-              icon: 'pencil',
-              onSelect: () => setRenaming({ kind: 'file', id: file.id, value: file.filename }),
-            },
-            moveHeading,
-            ...moveItems,
-            {
-              key: 'delete',
-              label: 'Delete',
-              icon: 'trash',
-              danger: true,
-              onSelect: () => onDeleteFile(file),
-            },
-          ]}
-        />
+        <div
+          className="group flex w-full items-center gap-1 rounded-md pr-1 transition-colors hover:bg-raised"
+          style={{ paddingLeft: `${depth * 14 + 4}px` }}
+        >
+          <button
+            type="button"
+            onClick={() => onSelectFile(file)}
+            className={cn(
+              'flex min-w-0 flex-1 items-center gap-2 rounded-md py-2 text-left text-[13px] transition-colors lg:py-1.5',
+              active ? 'font-medium text-ink' : 'text-mute hover:text-ink',
+            )}
+          >
+            <LanguageIcon lang={iconForFile(file.filename)} size="sm" />
+            <span className="min-w-0 flex-1 truncate">{file.filename}</span>
+          </button>
+          {rowMenu('file', file, file.filename)}
+        </div>
       </li>
     );
   };
@@ -265,7 +383,9 @@ export function FileExplorerSidebar({
     const renamingNow = renaming?.kind === 'folder' && renaming.id === folder.id;
     const childFolders = byParent.get(folder.id) ?? [];
     const childFiles = filesByFolder.get(folder.id) ?? [];
-    const open = expanded.has(folder.id);
+    // On phones everything stays visible: folders are always expanded and the
+    // collapse chevrons are hidden so no file ever hides behind a folder.
+    const open = isMobile || expanded.has(folder.id);
 
     if (renamingNow) {
       return (
@@ -297,73 +417,31 @@ export function FileExplorerSidebar({
       );
     }
 
-    const moveHeading: MenuItem = {
-      key: 'move-head',
-      label: 'Move to…',
-      icon: 'folder',
-      onSelect: () => {},
-    };
-    const moveItems: MenuItem[] = moveTargets('folder', folder).map((t) => ({
-      key: `move-folder-${t.id ?? 'root'}`,
-      label: t.label,
-      icon: 'folder',
-      disabled: t.current,
-      onSelect: () => onMoveFolder(folder, t.id),
-    }));
-
     return (
       <li key={folder.id}>
         <div
-          className="group flex w-full items-center gap-1 rounded-md py-1 pr-1 text-[13px] transition-colors hover:bg-raised"
+          className="group flex w-full items-center gap-1 rounded-md py-1.5 pr-1 text-[13px] transition-colors hover:bg-raised lg:py-1"
           style={{ paddingLeft: `${depth * 14 + 4}px` }}
         >
+          {!isMobile && (
+            <button
+              type="button"
+              onClick={() => toggleFolder(folder.id)}
+              className="flex h-5 w-5 shrink-0 items-center justify-center text-faint transition-colors hover:text-ink"
+              aria-label={open ? 'Collapse' : 'Expand'}
+            >
+              <Icon name={open ? 'chevronDown' : 'chevronRight'} size={13} />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => toggleFolder(folder.id)}
-            className="flex h-5 w-5 shrink-0 items-center justify-center text-faint transition-colors hover:text-ink"
-            aria-label={open ? 'Collapse' : 'Expand'}
+            className="flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-mute hover:text-ink"
           >
-            <Icon name={open ? 'chevronDown' : 'chevronRight'} size={13} />
-          </button>
-          <button
-            type="button"
-            onClick={() => toggleFolder(folder.id)}
-            className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-mute hover:text-ink"
-          >
-            <Icon name="folder" size={15} className="shrink-0 text-primary" />
+            <Icon name="folder" size={isMobile ? 16 : 15} className="shrink-0 text-primary" />
             <span className="truncate font-medium">{folder.name}</span>
           </button>
-          <Dropdown
-            align="right"
-            trigger={
-              <button
-                type="button"
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-faint transition-colors hover:text-ink"
-                aria-label={`Options for ${folder.name}`}
-              >
-                <Icon name="moreV" size={14} />
-              </button>
-            }
-            items={[
-              { key: 'new-file', label: 'New file', icon: 'filePlus', onSelect: () => startCreate('file', folder.id) },
-              { key: 'new-folder', label: 'New subfolder', icon: 'folderPlus', onSelect: () => startCreate('folder', folder.id) },
-              {
-                key: 'rename',
-                label: 'Rename',
-                icon: 'pencil',
-                onSelect: () => setRenaming({ kind: 'folder', id: folder.id, value: folder.name }),
-              },
-              moveHeading,
-              ...moveItems,
-              {
-                key: 'delete',
-                label: 'Delete',
-                icon: 'trash',
-                danger: true,
-                onSelect: () => onDeleteFolder(folder),
-              },
-            ]}
-          />
+          {rowMenu('folder', folder, folder.name)}
         </div>
 
         {open && (
@@ -391,33 +469,43 @@ export function FileExplorerSidebar({
   const rootFolders = byParent.get(null) ?? [];
   const rootFiles = filesByFolder.get(null) ?? [];
 
+  const moveSheet = sheet?.mode === 'move' ? sheet : null;
+  const moveTargetList = moveSheet ? moveTargets(moveSheet.kind, moveSheet.node) : [];
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between px-3 py-2.5">
+      <div className="flex items-center justify-between px-3 pt-3 pb-1.5">
         <div className="flex min-w-0 items-center gap-1.5">
-          <Icon name="folder" size={14} className="shrink-0 text-primary" />
-          <span className="truncate text-[13px] font-semibold text-ink" title={projectName}>
-            {projectName}
+          <Icon name="folder" size={13} className="shrink-0 text-primary" />
+          <span className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-faint">Explorer</span>
+          <span className="rounded-full bg-mute/10 px-1.5 py-px text-[10px] font-semibold text-mute">
+            {folders.length + files.length}
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           <button
             onClick={() => startCreate('file', null)}
-            className="rounded-md p-1 text-faint transition-colors hover:bg-raised hover:text-ink"
+            className="rounded-md p-2 text-faint transition-colors hover:bg-raised hover:text-ink active:bg-raised lg:p-1"
             aria-label="New file"
             title="New file"
           >
-            <Icon name="filePlus" size={16} />
+            <Icon name="filePlus" size={17} />
           </button>
           <button
             onClick={() => startCreate('folder', null)}
-            className="rounded-md p-1 text-faint transition-colors hover:bg-raised hover:text-ink"
+            className="rounded-md p-2 text-faint transition-colors hover:bg-raised hover:text-ink active:bg-raised lg:p-1"
             aria-label="New folder"
             title="New folder"
           >
-            <Icon name="folderPlus" size={16} />
+            <Icon name="folderPlus" size={17} />
           </button>
         </div>
+      </div>
+
+      <div className="flex min-w-0 items-center gap-1.5 border-b border-edge px-3 pb-2.5">
+        <span className="truncate text-[13px] font-semibold text-ink" title={projectName}>
+          {projectName}
+        </span>
       </div>
 
       {files.length === 0 && folders.length === 0 && !creating ? (
@@ -426,6 +514,13 @@ export function FileExplorerSidebar({
           icon="folder"
           title="No files yet"
           message="Create your first file or folder to start coding."
+          action={
+            isMobile ? (
+              <Button size="sm" variant="primary" onClick={() => startCreate('file', null)}>
+                New file
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
@@ -447,6 +542,181 @@ export function FileExplorerSidebar({
           </ul>
         </div>
       )}
+
+      {/* ---------- Mobile sheets ---------- */}
+
+      <BottomSheet
+        open={isMobile && sheet?.kind === 'file' && sheet.mode === 'create'}
+        onClose={clearSheet}
+        title="New file"
+      >
+        <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submitSheet(); }}>
+          <Input
+            label="File name"
+            placeholder="main.cpp"
+            autoFocus
+            value={sheetName}
+            onChange={(e) => setSheetName(e.target.value)}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="done"
+          />
+          <div>
+            <span className="mb-1.5 block text-[13px] font-medium text-ink">Language</span>
+            <div className="grid grid-cols-3 gap-2">
+              {FILE_LANGS.map((l) => (
+                <button
+                  key={l.slug}
+                  type="button"
+                  onClick={() => {
+                    setSheetLang(l.slug);
+                    setSheetName((n) => swapExtension(n, l.slug));
+                  }}
+                  className={cn(
+                    'flex h-10 items-center justify-center gap-1.5 rounded-lg border text-sm font-medium transition-colors',
+                    sheetLang === l.slug
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-edge bg-raised/60 text-mute hover:bg-raised hover:text-ink',
+                  )}
+                >
+                  <LanguageIcon lang={l.slug} size="sm" />
+                  {l.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-xs text-faint">Extension updates automatically. You can change it later in the editor.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" size="lg" fullWidth onClick={clearSheet}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="lg" fullWidth disabled={!sheetName.trim()}>
+              Create
+            </Button>
+          </div>
+        </form>
+      </BottomSheet>
+
+      <BottomSheet
+        open={isMobile && sheet?.kind === 'folder' && sheet.mode === 'create'}
+        onClose={clearSheet}
+        title="New folder"
+      >
+        <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submitSheet(); }}>
+          <Input
+            label="Folder name"
+            placeholder="src"
+            autoFocus
+            value={sheetName}
+            onChange={(e) => setSheetName(e.target.value)}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="done"
+          />
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" size="lg" fullWidth onClick={clearSheet}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="lg" fullWidth disabled={!sheetName.trim()}>
+              Create
+            </Button>
+          </div>
+        </form>
+      </BottomSheet>
+
+      <BottomSheet
+        open={isMobile && sheet?.mode === 'rename'}
+        onClose={clearSheet}
+        title={sheet?.kind === 'file' ? 'Rename file' : 'Rename folder'}
+      >
+        <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submitSheet(); }}>
+          <Input
+            label="New name"
+            autoFocus
+            value={sheetName}
+            onChange={(e) => setSheetName(e.target.value)}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="done"
+          />
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" size="lg" fullWidth onClick={clearSheet}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="lg" fullWidth disabled={!sheetName.trim()}>
+              Rename
+            </Button>
+          </div>
+        </form>
+      </BottomSheet>
+
+      <BottomSheet
+        open={isMobile && moveSheet !== null}
+        onClose={clearSheet}
+        title={moveSheet?.kind === 'file' ? 'Move file' : 'Move folder'}
+      >
+        <div className="flex flex-col gap-1.5">
+          {moveTargetList.map((t) => (
+            <button
+              key={`${t.id ?? 'root'}`}
+              type="button"
+              disabled={t.current}
+              onClick={() => {
+                if (!moveSheet) return;
+                if (moveSheet.kind === 'file') onMoveFile(moveSheet.node as File, t.id);
+                else onMoveFolder(moveSheet.node as Folder, t.id);
+                clearSheet();
+              }}
+              className={cn(
+                'flex h-12 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors',
+                t.current ? 'cursor-default bg-primary/5 text-ink' : 'text-mute hover:bg-raised hover:text-ink',
+              )}
+            >
+              <Icon name={t.isRoot ? 'home' : 'folder'} size={17} className={t.current ? 'text-primary' : 'text-faint'} />
+              <span className="truncate">{t.label}</span>
+              {t.current && <Icon name="check" size={16} className="ml-auto text-primary" />}
+            </button>
+          ))}
+        </div>
+        <div className="mt-4 flex gap-2">
+          <Button type="button" variant="secondary" size="lg" fullWidth onClick={clearSheet}>
+            Cancel
+          </Button>
+        </div>
+      </BottomSheet>
+
+      {/* Mobile ⋮ menu — every action visible at once, no scrolling. */}
+      <BottomSheet
+        open={isMobile && menuSheet !== null}
+        onClose={() => setMenuSheet(null)}
+        title={menuSheet ? (menuSheet.kind === 'folder' ? (menuSheet.node as Folder).name : (menuSheet.node as File).filename) : ''}
+      >
+        <div className="flex flex-col gap-1">
+          {menuSheet &&
+            buildMenuItems(menuSheet.kind, menuSheet.node).map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                disabled={item.disabled}
+                onClick={() => {
+                  setMenuSheet(null);
+                  item.onSelect?.();
+                }}
+                className={cn(
+                  'flex h-12 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors',
+                  item.danger ? 'text-error hover:bg-error/10' : 'text-ink hover:bg-raised',
+                  item.disabled && 'cursor-not-allowed opacity-50',
+                )}
+              >
+                {item.icon && <Icon name={item.icon} size={18} className={item.danger ? 'text-error' : 'text-mute'} />}
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              </button>
+            ))}
+        </div>
+      </BottomSheet>
     </div>
   );
 }

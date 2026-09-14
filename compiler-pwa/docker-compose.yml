@@ -63,10 +63,16 @@ services:
       - EXECUTION_OUTPUT_LIMIT=${EXECUTION_OUTPUT_LIMIT:-1000000}
       - EXECUTION_RATE_PER_MINUTE=${EXECUTION_RATE_PER_MINUTE:-5}
       - EXECUTION_RATE_PER_HOUR=${EXECUTION_RATE_PER_HOUR:-50}
+      - EXECUTION_HOST_BASE=${EXECUTION_HOST_BASE}
     volumes:
       - ./backend:/var/www/html
       - ./docker/backend/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro
       - /var/run/docker.sock:/var/run/docker.sock
+    # php-fpm workers run as www-data; give them the host docker group gid so
+    # interactive sessions can talk to the docker socket (default matches the
+    # usual docker group; override with DOCKER_GROUP_ID=<gid>).
+    group_add:
+      - "${DOCKER_GROUP_ID:-984}"
     entrypoint: ["/usr/local/bin/entrypoint.sh"]
     depends_on:
       mysql:

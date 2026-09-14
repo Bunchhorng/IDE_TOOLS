@@ -17,6 +17,8 @@ class ExecutionResource extends JsonResource
             'filename' => $this->whenLoaded('file', fn () => $this->file?->filename),
             'language_id' => $this->language_id,
             'status' => $this->status,
+            'interactive' => $this->interactive,
+            'interactive_finished' => $this->interactive_finished,
             'source_code' => $this->source_code,
             'stdin' => $this->stdin,
             'stdout' => $this->stdout,
