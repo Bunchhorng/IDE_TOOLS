@@ -545,6 +545,34 @@ export default function EditorPage() {
       setStdin('');
     }
     if (dirty) await handleSave();
+    // Execution needs the backend: never fire a doomed request while offline.
+    // `navigator.onLine` is the same truth source OfflineBanner / useOnline
+    // rely on — this gate guarantees an honest terminal message instead of a
+    // raw Chrome "Network Error" (and never a fake success).
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      isRunningRef.current = false;
+      const offlineMsg = t('toast.offline_cant_run');
+      setExecution({
+        id: 0,
+        user_id: project?.user_id ?? 0,
+        project_id: project.id,
+        file_id: activeFile.id,
+        language_id: 0,
+        status: 'system_error',
+        source_code: '',
+        stdin: null,
+        stdout: '',
+        stderr: offlineMsg,
+        exit_code: null,
+        execution_time: null,
+        memory_usage: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      setIsRunning(false);
+      toast.error(offlineMsg);
+      return;
+    }
     setIsRunning(true);
     setExecution(null);
     try {
