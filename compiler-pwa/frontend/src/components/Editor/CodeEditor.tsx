@@ -11,6 +11,8 @@ interface CodeEditorProps {
   onChange: (value: string) => void;
   readOnly?: boolean;
   autoFocus?: boolean;
+  /** Live cursor position (1-based line & column) for the status bar. */
+  onCursorChange?: (line: number, column: number) => void;
 }
 
 const LANGUAGE_MAP: Record<string, string> = {
@@ -147,7 +149,7 @@ export interface CodeEditorHandle {
 }
 
 const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
-  function CodeEditorInner({ value, language, onChange, readOnly = false, autoFocus = false }, ref) {
+  function CodeEditorInner({ value, language, onChange, readOnly = false, autoFocus = false, onCursorChange }, ref) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const { theme } = useTheme();
   const { prefs } = usePreferences();
@@ -184,6 +186,9 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
 
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor;
+    editor.onDidChangeCursorPosition((e) => {
+      if (onCursorChange) onCursorChange(e.position.lineNumber, e.position.column);
+    });
     if (autoFocus) {
       editor.focus();
       editor.setPosition({ lineNumber: 1, column: 1 });

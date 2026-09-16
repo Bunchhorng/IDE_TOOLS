@@ -14,6 +14,7 @@ import { Dropdown } from '../../components/ui/Dropdown';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { Icon } from '../../components/ui/Icon';
 import { LanguageIcon, type LangGlyph } from '../../components/LanguageIcon';
+import { InstallPWAButton } from '../../components/InstallPWAButton';
 import { greeting, timeAgo, formatExecutionTime } from '../../lib/format';
 import { projectService } from '../../services/projectService';
 import { executionService } from '../../services/executionService';
@@ -145,10 +146,13 @@ export default function Dashboard() {
           </h1>
           <p className="mt-1 text-sm text-mute">Pick up where you left off or start something new.</p>
         </div>
-        <Button size="lg" onClick={() => setShowNew(true)}>
-          <Icon name="plus" size={17} />
-          New project
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <InstallPWAButton variant="secondary" size="lg" />
+          <Button size="lg" onClick={() => setShowNew(true)}>
+            <Icon name="plus" size={17} />
+            New project
+          </Button>
+        </div>
       </div>
 
       <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">

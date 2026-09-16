@@ -4,14 +4,16 @@ interface UseResizableOptions {
   initial: number;
   min?: number;
   max?: number;
+  /** Start collapsed (e.g. on small screens where the terminal squeezes the editor). */
+  initialCollapsed?: boolean;
 }
 
 /** Distance (px) a gesture must exceed before it's a resize rather than a tap. */
 const DRAG_THRESHOLD = 3;
 
-export function useResizable({ initial, min = 80, max }: UseResizableOptions) {
+export function useResizable({ initial, min = 80, max, initialCollapsed = false }: UseResizableOptions) {
   const [size, setSize] = useState(initial);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(initialCollapsed);
   const dragging = useRef(false);
   const startY = useRef(0);
   const startSize = useRef(0);

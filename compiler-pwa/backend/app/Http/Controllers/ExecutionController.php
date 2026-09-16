@@ -63,7 +63,7 @@ class ExecutionController extends Controller
                 ], 403);
             }
 
-            if ($request->project_id && $file->project_id !== $request->project_id) {
+            if ($request->project_id && (int) $file->project_id !== (int) $request->project_id) {
                 return response()->json([
                     'success' => false,
                     'message' => 'File not found in this project.',

@@ -68,7 +68,8 @@ export type IconName =
   | 'globe'
   | 'mobile'
   | 'c'
-  | 'lock';
+  | 'lock'
+  | 'cursor';
 
 type IconProps = SVGProps<SVGSVGElement> & {
   name: IconName;
@@ -386,6 +387,9 @@ const JSX: Record<IconName, ReactNode[]> = {
   lock: [
     <rect key="a" x="3" y="11" width="18" height="11" rx="2" ry="2" />,
     <path key="b" d="M7 11V7a5 5 0 0 1 10 0v4" />,
+  ],
+  cursor: [
+    <path key="a" d="M9 3h6M12 3v18M9 21h6" />,
   ],
 };
 

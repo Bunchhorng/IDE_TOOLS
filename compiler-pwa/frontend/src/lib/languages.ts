@@ -47,9 +47,15 @@ const EXT_ACCEPTED: Record<string, string> = {
   pyw: 'python',
 };
 
-export function languageFromFilename(filename: string): string {
+/** The language known to map to a filename's extension, or null when the
+ *  extension isn't a code one (e.g. `.txt`, `.json`) or there is none. */
+export function detectLanguage(filename: string): string | null {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
-  return EXT_ACCEPTED[ext] ?? 'cpp';
+  return EXT_ACCEPTED[ext] ?? null;
+}
+
+export function languageFromFilename(filename: string): string {
+  return detectLanguage(filename) ?? 'cpp';
 }
 
 export function iconForFile(filename: string): 'c' | 'cpp' | 'python' | 'file' {

@@ -6,6 +6,7 @@ import { StatusBadge } from '../ui/Badge';
 import { Icon } from '../ui/Icon';
 import { explainError, isInputStarved } from '../../lib/errorHints';
 import { buildSession, detectPrompts } from '../../lib/prompts';
+import { formatExecutionTime } from '../../lib/format';
 import { TerminalSession } from './TerminalSession';
 import { useI18n } from '../../i18n';
 import { translations, type TranslationKey } from '../../i18n/translations';
@@ -334,6 +335,28 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
   const consoleHidden =
     !!execution && !isRunning && !waitingForInput && allPrompts.length === 0 && inputLines.length === 0;
 
+  /** Footer shown after a finished run: OK / exit code / elapsed time. */
+  const runSummary = execution && !isRunning ? (
+    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-edge pt-2.5 text-[12px]">
+      {effectiveStatus === 'success' && (
+        <span className="inline-flex items-center gap-1.5 font-medium text-success">
+          <Icon name="checkCircle" size={14} />
+          {t('terminal.finished_message')}
+        </span>
+      )}
+      {execution.exit_code !== null && (
+        <span className="inline-flex items-center gap-1.5 text-mute">
+          {t('terminal.exit_code', { code: execution.exit_code })}
+        </span>
+      )}
+      {execution.execution_time !== null && (
+        <span className="inline-flex items-center gap-1.5 text-mute">
+          {t('terminal.execution_time', { time: formatExecutionTime(execution.execution_time) })}
+        </span>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-panel">
       <div className="flex items-center justify-between border-b border-edge pr-1.5 lg:pr-2">
@@ -395,6 +418,9 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
                   {liveParts.map((part, i) => (
                     <span key={i}>{part.text}</span>
                   ))}
+                  <span className="mt-2 block text-[10px] font-semibold uppercase tracking-wider text-faint">
+                    {t('terminal.console_label')}
+                  </span>
                   <ConsoleInput
                     key="live-console"
                     ref={consoleRef}
@@ -439,19 +465,26 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
                       only appears once the program has run (and asks for input).
                       Hidden while a run is in flight — only the spinner shows. */}
                   {!consoleHidden && !isRunning && !!execution && (
-                    <ConsoleInput
-                      key="session-console"
-                      ref={consoleRef}
-                      code={fileContent ?? ''}
-                      language={activeLanguage ?? 'python'}
-                      lines={inputLines}
-                      onLinesChange={onInputLinesChange}
-                      running={isRunning}
-                      disabled={isRunning}
-                      echoFrom={session && !waitingForInput ? answeredCount : 0}
-                      onAllLinesCommitted={onAllLinesCommitted}
-                />
-              )}
+                    <div className="mt-2.5">
+                      <label className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-mute">
+                        <Icon name="keyboard" size={12} className="text-faint" />
+                        {t('terminal.console_label')}
+                      </label>
+                      <ConsoleInput
+                        key="session-console"
+                        ref={consoleRef}
+                        code={fileContent ?? ''}
+                        language={activeLanguage ?? 'python'}
+                        lines={inputLines}
+                        onLinesChange={onInputLinesChange}
+                        running={isRunning}
+                        disabled={isRunning}
+                        echoFrom={session && !waitingForInput ? answeredCount : 0}
+                        onAllLinesCommitted={onAllLinesCommitted}
+                      />
+                    </div>
+                  )}
+                {runSummary}
                 </>
               )}
             </div>
@@ -552,6 +585,8 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
                     </div>
                   </div>
                 )}
+
+                {runSummary}
               </>
             )}
             </div>

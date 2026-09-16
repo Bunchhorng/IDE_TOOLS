@@ -98,7 +98,10 @@ export const ConsoleInput = forwardRef<ConsoleInputHandle, ConsoleInputProps>(
   const commit = () => {
     if (disabled) return;
     const value = draft;
-    if (value.trim() === '') return;
+    // Live sessions must be able to send a blank line (Enter with empty
+    // input) — many programs wait for an empty line or a menu "press Enter
+    // to continue" signal. Pre-run batch input simply skips blank lines.
+    if (value.trim() === '' && !live) return;
     const next = [...lines, value];
     onLinesChange(next);
     setDraft('');
@@ -215,7 +218,7 @@ export const ConsoleInput = forwardRef<ConsoleInputHandle, ConsoleInputProps>(
           autoComplete="off"
           autoCapitalize="off"
           autoCorrect="off"
-          placeholder={nextPrompt ? '' : undefined}
+          placeholder={nextPrompt ? '' : t('terminal.console_placeholder')}
           className="min-w-0 flex-1 bg-transparent font-mono text-ink caret-primary placeholder:text-faint/60 focus:outline-none"
           aria-label={t('terminal.console_label')}
         />

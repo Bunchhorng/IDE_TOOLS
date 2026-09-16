@@ -160,8 +160,19 @@ function detectFamily(text: string, language?: string | null): 'python' | 'cc' |
 
 function findLine(text: string, family: 'python' | 'cc' | null): number | undefined {
   if (family !== 'cc') {
-    const py = text.match(/File\s+"[^"]*",\s*line\s+(\d+)/);
-    if (py) return Number(py[1]);
+    // Python syntax-error tracebacks wrap the user source with a bootstrap
+    // stub ("<string>", line 1). Skip stub/interactive frames and report the
+    // innermost real frame (the actual error/crash site in the student code).
+    const frames: Array<{ file: string; line: number }> = [];
+    const re = /File\s+"([^"]+)",\s*line\s+(\d+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      frames.push({ file: m[1], line: Number(m[2]) });
+    }
+    const user = frames
+      .filter((f) => !['<string>', '<stdin>', '<command>', '<input>'].includes(f.file))
+      .pop();
+    if (user) return user.line;
   }
   if (family !== 'python') {
     const cc = text.match(/^[^\s:]+:(\d+):\d+:/m);

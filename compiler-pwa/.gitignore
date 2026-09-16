@@ -8,3 +8,5 @@ vendor/
 !storage/**/.gitignore
 storage/*.sqlite
 mysql_data/
+# PHPUnit result cache (machine-specific test artifact)
+backend/.phpunit.result.cache

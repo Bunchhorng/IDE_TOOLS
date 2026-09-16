@@ -6,6 +6,7 @@ import { Tooltip } from '../ui/Tooltip';
 import { LanguageIcon } from '../LanguageIcon';
 import { iconForFile } from '../../lib/languages';
 import { useI18n } from '../../i18n';
+import logoUrl from '../../assets/logo.png';
 
 interface EditorTopBarProps {
   projectName: string | null;
@@ -16,6 +17,7 @@ interface EditorTopBarProps {
   canRun: boolean;
   onSave: () => void;
   onRun: () => void;
+  onStop: () => void;
   onShare: () => void;
   onDownload: () => void;
   onToggleSidebar: () => void;
@@ -31,6 +33,7 @@ export function EditorTopBar({
   canRun,
   onSave,
   onRun,
+  onStop,
   onShare,
   onDownload,
   onToggleSidebar,
@@ -69,9 +72,12 @@ export function EditorTopBar({
         </Tooltip>
 
         {/* Brand plate */}
-        <span className="cr-brand-plate ml-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white" aria-hidden="true">
-          <Icon name="play" size={12} strokeWidth={2.4} className="ml-px fill-current" />
-        </span>
+        <img
+          src={logoUrl}
+          alt=""
+          className="cr-brand-plate ml-0.5 h-7 w-7 shrink-0 rounded-lg object-contain"
+          aria-hidden="true"
+        />
 
         {/* Breadcrumb — desktop & tablet */}
         <div className="ml-2 hidden min-w-0 sm:block">
@@ -110,7 +116,24 @@ export function EditorTopBar({
         {/* Mobile — name only */}
         <div className="min-w-0 sm:hidden">
           <p className="truncate text-sm font-semibold text-ink">{projectName ?? 'Project'}</p>
-          {fileName && <p className="truncate font-mono text-[11px] text-mute">{fileName}</p>}
+          {running ? (
+            <p className="flex items-center gap-1 truncate font-mono text-[11px] font-medium text-primary">
+              <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary" />
+              {t('statusbar.running')}
+            </p>
+          ) : isSaving ? (
+            <p className="flex items-center gap-1 truncate font-mono text-[11px] font-medium text-info">
+              <span className="h-2 w-2 shrink-0 animate-spin rounded-full border-[1.5px] border-info border-t-transparent" />
+              {t('editor.saving')}
+            </p>
+          ) : dirty ? (
+            <p className="flex items-center gap-1 truncate font-mono text-[11px] text-warning">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />
+              {t('editor.unsaved_changes')}
+            </p>
+          ) : (
+            fileName && <p className="truncate font-mono text-[11px] text-mute">{fileName}</p>
+          )}
         </div>
       </div>
 
@@ -127,6 +150,18 @@ export function EditorTopBar({
           </Button>
         </Tooltip>
 
+        <Tooltip label={t('nav.settings')} side="bottom">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/settings')}
+            className="hidden lg:inline-flex"
+            aria-label={t('nav.settings')}
+          >
+            <Icon name="settings" size={16} />
+          </Button>
+        </Tooltip>
+
         <Tooltip label="Save (Ctrl+S)" side="bottom">
           <Button variant="secondary" size="sm" onClick={onSave} disabled={!canRun || isSaving} className="hidden lg:inline-flex">
             <Icon name="save" size={15} />
@@ -139,17 +174,30 @@ export function EditorTopBar({
           size="sm"
           onClick={onRun}
           disabled={running || !canRun}
+          loading={running}
           title="Run (Ctrl+Enter)"
-          className="cr-btn-run min-w-[5.5rem] shrink-0 px-4 font-semibold"
+          className="cr-btn-run min-w-0 shrink-0 px-2.5 font-semibold md:min-w-[5.5rem] md:px-4"
         >
-          <span className="relative flex items-center justify-center">
-            {running ? (
-              <Icon name="stop" size={15} className="animate-pulse" />
-            ) : (
-              <Icon name="play" size={15} className="fill-current" />
-            )}
-            <span className="ml-1.5">{running ? 'Running' : 'Run'}</span>
-          </span>
+          <Icon name="play" size={15} className="fill-current" />
+          <span className="ml-1.5 hidden md:inline">{t('editor.run')}</span>
+        </Button>
+
+        <Button
+          variant="danger"
+          size="sm"
+          onClick={onStop}
+          disabled={!running}
+          title={t('editor.stop_program')}
+          aria-label={t('editor.stop_program')}
+          className="min-w-0 shrink-0 px-2.5 font-semibold md:min-w-[4.5rem] md:px-4"
+        >
+          <Icon name="stop" size={15} />
+          {running && (
+            <span className="relative hidden h-2 w-2 md:flex">
+              <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-current" />
+            </span>
+          )}
+          <span className="ml-1.5 hidden md:inline">{t('editor.stop')}</span>
         </Button>
       </div>
     </header>

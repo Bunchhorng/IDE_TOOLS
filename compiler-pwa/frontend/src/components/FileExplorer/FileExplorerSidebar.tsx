@@ -7,7 +7,7 @@ import { LanguageIcon } from '../LanguageIcon';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { BottomSheet } from '../ui/BottomSheet';
-import { iconForFile } from '../../lib/languages';
+import { detectLanguage, iconForFile, languageFromFilename } from '../../lib/languages';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { File, Folder } from '../../types';
 
@@ -50,24 +50,9 @@ const FILE_LANGS = [
 
 type FileLang = (typeof FILE_LANGS)[number]['slug'];
 
-const FILE_EXT: Record<FileLang, string> = { c: 'c', cpp: 'cpp', python: 'py' };
-const KNOWN_EXT = /\.(c|cpp|cc|cxx|py|pyw)$/i;
-
-/** Append the extension for a language when a filename lacks one. */
-function withExtension(name: string, lang: FileLang): string {
-  return KNOWN_EXT.test(name) ? name : `${name}.${FILE_EXT[lang]}`;
-}
-
-/** Swap a known extension when switching the selected language. */
-function swapExtension(name: string, lang: FileLang): string {
-  const base = name.replace(KNOWN_EXT, '');
-  return base.trim() ? `${base}.${FILE_EXT[lang]}` : name;
-}
-
-function languageForName(name: string): string {
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  return ext === 'py' ? 'python' : ext === 'c' ? 'c' : 'cpp';
-}
+/** Infer a language slug from the filename when the extension is a known one,
+ *  otherwise fall back to cpp (same default the server would use). */
+const languageForName = languageFromFilename;
 
 export function FileExplorerSidebar({
   files,
@@ -96,6 +81,7 @@ export function FileExplorerSidebar({
   const [menuSheet, setMenuSheet] = useState<{ kind: 'file' | 'folder'; node: File | Folder } | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const expandedSeededRef = useRef(false);
+  const langTouchedRef = useRef(false);
 
   // Folders load asynchronously after first render — expand them all once when
   // they arrive, then leave future toggles to the user.
@@ -183,6 +169,7 @@ export function FileExplorerSidebar({
     if (isMobile) {
       setSheetName('');
       setSheetLang('cpp');
+      langTouchedRef.current = false;
       setSheet({ kind, mode: 'create', parentId });
       setCreating(null);
       setRenaming(null);
@@ -237,7 +224,7 @@ export function FileExplorerSidebar({
     if (!name) return;
     if (sheet.mode === 'create') {
       if (sheet.kind === 'file') {
-        onCreateFile(withExtension(name, sheetLang), sheetLang, sheet.parentId);
+        onCreateFile(name, sheetLang, sheet.parentId);
       } else {
         onCreateFolder(name, sheet.parentId);
       }
@@ -365,9 +352,12 @@ export function FileExplorerSidebar({
           <button
             type="button"
             onClick={() => onSelectFile(file)}
+            aria-current={active ? 'true' : undefined}
             className={cn(
               'flex min-w-0 flex-1 items-center gap-2 rounded-md py-2 text-left text-[13px] transition-colors lg:py-1.5',
-              active ? 'font-medium text-ink' : 'text-mute hover:text-ink',
+              active
+                ? 'bg-primary/10 font-medium text-ink shadow-[inset_2px_0_0_0_var(--primary)]'
+                : 'text-mute hover:text-ink',
             )}
           >
             <LanguageIcon lang={iconForFile(file.filename)} size="sm" />
@@ -553,10 +543,19 @@ export function FileExplorerSidebar({
         <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submitSheet(); }}>
           <Input
             label="File name"
-            placeholder="main.cpp"
+            placeholder="notes.txt"
             autoFocus
             value={sheetName}
-            onChange={(e) => setSheetName(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setSheetName(v);
+              // Auto-detect language from the typed extension unless the user
+              // has already picked one manually.
+              if (!langTouchedRef.current) {
+                const detected = detectLanguage(v) as FileLang | null;
+                if (detected) setSheetLang(detected);
+              }
+            }}
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
@@ -571,7 +570,7 @@ export function FileExplorerSidebar({
                   type="button"
                   onClick={() => {
                     setSheetLang(l.slug);
-                    setSheetName((n) => swapExtension(n, l.slug));
+                    langTouchedRef.current = true;
                   }}
                   className={cn(
                     'flex h-10 items-center justify-center gap-1.5 rounded-lg border text-sm font-medium transition-colors',
@@ -585,7 +584,7 @@ export function FileExplorerSidebar({
                 </button>
               ))}
             </div>
-            <p className="mt-1.5 text-xs text-faint">Extension updates automatically. You can change it later in the editor.</p>
+            <p className="mt-1.5 text-xs text-faint">Use any extension — e.g. <code className="rounded bg-raised px-1 py-px text-faint">.txt</code>, <code className="rounded bg-raised px-1 py-px text-faint">.md</code>, <code className="rounded bg-raised px-1 py-px text-faint">.cpp</code>. Pick a language for running the code.</p>
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="secondary" size="lg" fullWidth onClick={clearSheet}>

@@ -23,6 +23,24 @@ if (typeof window !== 'undefined' && 'onbeforeinstallprompt' in window) {
   });
 }
 
+async function waitForControl(): Promise<void> {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+  if (navigator.serviceWorker.controller) return;
+  // Chrome only fires `beforeinstallprompt` when the service worker controls
+  // the page. On the very first load it may still be activating/claiming.
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(resolve, 5000);
+    navigator.serviceWorker.addEventListener(
+      'controllerchange',
+      () => {
+        clearTimeout(timeout);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
+
 export function useInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(modulePrompt);
   const [installed, setInstalled] = useState(false);
@@ -49,11 +67,14 @@ export function useInstallPrompt() {
 
   const install = useCallback(async (): Promise<boolean> => {
     const getPrompt = () => deferredPrompt ?? modulePrompt;
+    // Ensure the service worker controls the page first, then wait for Chrome to
+    // deliver `beforeinstallprompt`. The event can arrive moments after control.
+    await waitForControl();
     let promptToUse = getPrompt();
 
     // `beforeinstallprompt` can fire a moment after the page loads; wait briefly for it so a
     // click always triggers the native install dialog on devices that support it.
-    const deadline = Date.now() + 4000;
+    const deadline = Date.now() + 6000;
     while (!promptToUse && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 100));
       promptToUse = getPrompt();

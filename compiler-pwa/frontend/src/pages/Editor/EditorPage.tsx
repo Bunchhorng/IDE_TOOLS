@@ -20,13 +20,14 @@ import { useResizable } from '../../hooks/useResizable';
 import { useResizableX } from '../../hooks/useResizableX';
 import { cn } from '../../lib/cn';
 import { getTemplateContent } from '../../lib/templates';
-import { languageFromFilename } from '../../lib/languages';
+import { detectLanguage } from '../../lib/languages';
 import { isInputStarved } from '../../lib/errorHints';
 import { codeNeedsInput } from '../../lib/needsInput';
 import { useTheme } from '../../context/ThemeContext';
 import { useToast } from '../../context/ToastContext';
 import { usePreferences } from '../../context/PreferencesContext';
 import { useI18n } from '../../i18n';
+import { setSuppress401Reload } from '../../services/api';
 import { projectService } from '../../services/projectService';
 import { fileService } from '../../services/fileService';
 import { folderService } from '../../services/folderService';
@@ -58,6 +59,7 @@ export default function EditorPage() {
   const [inputLines, setInputLines] = useState<string[]>([]);
   const [execution, setExecution] = useState<Execution | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [isSaving, setIsSaving] = useState(false);
   /** Active interactive session: the sandbox id of the running program. */
   const [liveSessionId, setLiveSessionId] = useState<number | null>(null);
@@ -94,7 +96,12 @@ export default function EditorPage() {
   const sessionTokenRef = useRef(0);
   /** Mirror of interactive-eligible for the stale-safe auto-run guard. */
   const interactiveEligibleRef = useRef(false);
-  const panel = useResizable({ initial: 240, min: 80 });
+  const panel = useResizable({
+    initial: 240,
+    min: 80,
+    initialCollapsed:
+      typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches,
+  });
   const sidebar = useResizableX({ initial: 240, min: 140 });
 
   const pId = Number(projectId);
@@ -301,6 +308,7 @@ export default function EditorPage() {
     setExecution(finished);
     isRunningRef.current = false;
     setIsRunning(false);
+    setSuppress401Reload(false);
   };
 
   /** Begin a live interactive session: show live output and poll the sandbox
@@ -309,6 +317,7 @@ export default function EditorPage() {
     const token = ++sessionTokenRef.current;
     liveSessionIdRef.current = exec.id;
     liveActiveRef.current = true;
+    setSuppress401Reload(true);
     setLiveSessionId(exec.id);
     setExecution(null);
     setLiveOutput(exec.stdout ?? '');
@@ -361,6 +370,7 @@ export default function EditorPage() {
     (finalize = true) => {
       const token = ++sessionTokenRef.current;
       liveActiveRef.current = false;
+      setSuppress401Reload(false);
       if (pollTimerRef.current) {
         window.clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
@@ -441,6 +451,7 @@ export default function EditorPage() {
     if (wasLive && id != null) {
       void executionService.sendInteractiveInput(id, { close: true }).catch(() => undefined);
     }
+    setSuppress401Reload(false);
     if (pollTimerRef.current) {
       window.clearInterval(pollTimerRef.current);
     }
@@ -507,6 +518,7 @@ export default function EditorPage() {
           // result and release the running guard (we never entered a session).
           isRunningRef.current = false;
           setIsRunning(false);
+          setSuppress401Reload(false);
           setExecution(exec);
           return;
         }
@@ -536,6 +548,7 @@ export default function EditorPage() {
     setIsRunning(true);
     setExecution(null);
     try {
+      setSuppress401Reload(true);
       const response = await executionService.execute({
         language: selectedLanguage,
         project_id: project.id,
@@ -581,6 +594,7 @@ export default function EditorPage() {
     } finally {
       isRunningRef.current = false;
       setIsRunning(false);
+      setSuppress401Reload(false);
     }
   };
   handleRunRef.current = handleRun;
@@ -764,11 +778,12 @@ export default function EditorPage() {
     void (async () => {
       try {
         // A rename that swaps the extension should switch the language too,
-        // otherwise Run feeds the file to the wrong compiler.
-        const desiredLanguage = languageFromFilename(newName);
+        // otherwise Run feeds the file to the wrong compiler. Keep the current
+        // language when the new extension isn't a code one (e.g. `.txt`).
+        const desiredLanguage = detectLanguage(newName);
         const response = await fileService.update(file.id, {
           filename: newName,
-          ...(desiredLanguage !== file.language ? { language: desiredLanguage } : {}),
+          ...(desiredLanguage && desiredLanguage !== file.language ? { language: desiredLanguage } : {}),
         });
         // Only take the fields the rename actually changed from the server so
         // unsaved local content/language edits are never clobbered.
@@ -882,6 +897,7 @@ export default function EditorPage() {
         canRun={!!activeFile}
         onSave={() => void handleSave()}
         onRun={() => void handleRun(false)}
+        onStop={() => stopLiveSession()}
         onShare={() => void handleShare()}
         onDownload={handleDownload}
         onToggleSidebar={sidebar.toggle}
@@ -955,13 +971,14 @@ export default function EditorPage() {
               onCloseTab={handleCloseTab}
             />
 
-            <div className="flex min-h-0 flex-1">
+            <div className="flex min-h-0 flex-1 overflow-hidden">
               {activeFile ? (
                 <CodeEditor
                   ref={editorRef}
                   value={activeFile.content}
                   language={selectedLanguage}
                   onChange={handleCodeChange}
+                  onCursorChange={(line, column) => setCursor({ line, column })}
                 />
               ) : (
                 <div className="flex flex-1 items-center justify-center bg-editor">
@@ -981,7 +998,7 @@ export default function EditorPage() {
             </div>
 
             <div
-              className="group/panel flex shrink-0 flex-col border-t border-edge"
+              className="group/panel flex shrink-0 flex-col"
               style={{ height: panel.collapsed ? 0 : panel.size }}
             >
               <button
@@ -989,10 +1006,16 @@ export default function EditorPage() {
                 onMouseDown={panel.onMouseDown}
                 onTouchStart={panel.onTouchStart}
                 onClick={panel.onClick}
-                className="flex h-3 w-full shrink-0 cursor-row-resize touch-none items-center justify-center bg-edge/40 transition-colors hover:bg-primary/30"
-                aria-label="Resize terminal"
+                className="flex h-4 w-full shrink-0 cursor-row-resize touch-none items-center justify-center gap-2 bg-edge/40 transition-colors hover:bg-primary/25 lg:h-3"
+                aria-label={panel.collapsed ? t('terminal.show_panel') : t('terminal.hide_panel')}
+                title={panel.collapsed ? t('terminal.show_panel') : t('terminal.hide_panel')}
               >
                 <span className="h-0.5 w-8 rounded-full bg-faint/50 transition-colors group-hover/panel:bg-primary/70" />
+                <Icon
+                  name={panel.collapsed ? 'chevronUp' : 'chevronDown'}
+                  size={12}
+                  className="shrink-0 text-faint transition-colors group-hover/panel:text-primary"
+                />
               </button>
               <div className="min-h-0 flex-1 overflow-hidden">
                 <TerminalPanel
@@ -1059,19 +1082,31 @@ onInputReady={handleInputReady}
           onLanguageChange={handleLanguageChange}
           fileCount={files.length}
           fileName={activeFile?.filename}
+          running={isRunning}
+          cursorLine={cursor.line}
+          cursorColumn={cursor.column}
         />
       </div>
 
-      {/* Mobile Run FAB */}
+      {/* Mobile Run/Stop FAB — Run when idle, Stop while a run is in flight */}
       {(mobileTab === 'code' || mobileTab === 'output') && activeFile && (
         <button
-          onClick={() => void handleRun()}
-          disabled={isRunning}
-          className="cr-btn-run fixed bottom-20 right-4 z-40 flex h-13 w-13 items-center justify-center rounded-full text-white transition-all active:scale-95 disabled:opacity-60 lg:hidden"
-          aria-label="Run code"
+          onClick={() => (isRunning ? stopLiveSession() : void handleRun())}
+          className={cn(
+            'fixed bottom-20 right-4 z-40 flex h-13 w-13 items-center justify-center rounded-full text-white transition-all active:scale-95 lg:hidden',
+            isRunning ? 'cr-btn-stop' : 'cr-btn-run',
+          )}
+          aria-label={isRunning ? t('editor.stop_program') : 'Run code'}
+          title={isRunning ? t('editor.stop_program') : 'Run'}
         >
           {isRunning ? (
-            <Spinner size="sm" className="text-white" />
+            <>
+              <Icon name="stop" size={22} />
+              <span className="absolute right-2.5 top-2.5 flex h-3 w-3">
+                <span className="inline-flex h-3 w-3 animate-ping rounded-full bg-white/40" />
+                <span className="absolute inline-flex h-3 w-3 rounded-full bg-white" />
+              </span>
+            </>
           ) : (
             <Icon name="play" size={22} className="ml-0.5 fill-current" />
           )}

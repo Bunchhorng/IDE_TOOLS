@@ -84,6 +84,16 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.unsaved_changes': 'Unsaved changes',
     'editor.all_saved': 'All changes saved',
     'editor.saving': 'Saving\u2026',
+    'editor.stop_program': 'Stop program',
+    'editor.run': 'Run',
+    'editor.stop': 'Stop',
+
+    // Status bar
+    'statusbar.ready': 'Ready',
+    'statusbar.running': 'Running',
+    'statusbar.utf8': 'UTF-8',
+    'statusbar.spaces': 'Spaces: {n}',
+    'statusbar.ln_col': 'Ln {ln}, Col {col}',
 
     // Terminal panel
     'terminal.output': 'Output',
@@ -110,6 +120,11 @@ export const translations: Record<Locale, Record<string, string>> = {
     'terminal.remove_input_line': 'Remove this input line',
     'terminal.type_input_now': 'Type input now',
     'terminal.clear': 'Clear terminal',
+    'terminal.exit_code': 'Exit code: {code}',
+    'terminal.execution_time': 'Execution time: {time}',
+    'terminal.show_panel': 'Show terminal panel',
+    'terminal.hide_panel': 'Hide terminal panel',
+    'terminal.finished_message': 'Program finished successfully.',
 
     // Status labels (editor)
     'label.compilation_error': 'Compilation error',
@@ -436,6 +451,16 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.unsaved_changes': 'ការផ្លាស់ប្តូរមិនទាន់រក្សាទុក',
     'editor.all_saved': 'ការផ្លាស់ប្តូរទាំងអស់បានរក្សាទុក',
     'editor.saving': 'កំពុងរក្សាទុក\u2026',
+    'editor.stop_program': 'បញ្ឈប់កម្មវិធី',
+    'editor.run': 'ដំណើរការ',
+    'editor.stop': 'បញ្ឈប់',
+
+    // Status bar
+    'statusbar.ready': 'រួចរាល់',
+    'statusbar.running': 'កំពុងដំណើរការ',
+    'statusbar.utf8': 'UTF-8',
+    'statusbar.spaces': 'Spaces: {n}',
+    'statusbar.ln_col': 'Ln {ln}, Col {col}',
 
     // Terminal panel
     'terminal.output': 'លទ្ធផល',
@@ -462,6 +487,11 @@ export const translations: Record<Locale, Record<string, string>> = {
     'terminal.remove_input_line': 'លុបបន្ទាត់បញ្ចូលនេះ',
     'terminal.type_input_now': 'សរសេរទិន្នន័យបញ្ចូលឥឡូវនេះ',
     'terminal.clear': 'លុបបន្ទាត់ទិន្នន័យបញ្ចូល',
+    'terminal.exit_code': 'លេខកូដចាកចេញ៖ {code}',
+    'terminal.execution_time': 'ពេលដំណើរការ៖ {time}',
+    'terminal.finished_message': 'កម្មវិធីបានបញ្ចប់ដោយជោគជ័យ។',
+    'terminal.show_panel': 'បង្ហាញបន្ទះ terminal',
+    'terminal.hide_panel': 'លាក់បន្ទះ terminal',
 
     // Status labels (editor)
     'label.compilation_error': 'កំហុសក្បួនដោះស្រាយ',

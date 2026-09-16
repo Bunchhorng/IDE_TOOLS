@@ -28,7 +28,7 @@ class UpdateFileRequest extends FormRequest
                 'required',
                 'string',
                 'max:255',
-                'regex:/^[a-zA-Z0-9][a-zA-Z0-9_.\-]*$/',
+                'regex:/^(?!\.+$)[a-zA-Z0-9_.\-]+$/',
                 Rule::unique('files', 'filename')
                     ->where('project_id', $projectId)
                     ->ignore($file?->id),

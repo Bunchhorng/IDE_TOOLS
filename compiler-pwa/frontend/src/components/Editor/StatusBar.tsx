@@ -1,5 +1,6 @@
 import { useOnline } from '../../hooks/useOnline';
 import { useTheme } from '../../context/ThemeContext';
+import { usePreferences } from '../../context/PreferencesContext';
 import { Icon } from '../ui/Icon';
 import { LanguageIcon, type LangGlyph } from '../LanguageIcon';
 import LanguageSelector from '../LanguageSelector/LanguageSelector';
@@ -17,15 +18,22 @@ export function StatusBar({
   onLanguageChange,
   fileCount,
   fileName,
+  running,
+  cursorLine,
+  cursorColumn,
 }: {
   languages: Language[];
   selectedLanguage: string;
   onLanguageChange: (slug: string) => void;
   fileCount: number;
   fileName?: string;
+  running: boolean;
+  cursorLine: number;
+  cursorColumn: number;
 }) {
   const online = useOnline();
   const { theme, toggle } = useTheme();
+  const { prefs } = usePreferences();
   const { t } = useI18n();
   const meta = languages.find((l) => l.slug === selectedLanguage);
 
@@ -49,7 +57,48 @@ export function StatusBar({
           {fileCount} {fileCount === 1 ? 'file' : 'files'}
         </span>
       </div>
-      <div className="ml-auto flex items-center gap-2.5">
+
+      <div className="ml-auto flex min-w-0 items-center gap-2.5">
+        {/* Editor state — only when a file is open. */}
+        {fileName && (
+          <>
+            <span className="hidden items-center gap-1.5 sm:inline-flex" title={t('statusbar.utf8')}>
+              <Icon name="globe" size={12} className="text-faint" />
+              {t('statusbar.utf8')}
+            </span>
+            <span className="hidden items-center gap-1.5 sm:inline-flex" title="Indentation">
+              <Icon name="minus" size={12} className="text-faint" />
+              {t('statusbar.spaces', { n: prefs.tabSize })}
+            </span>
+            <span
+              className="inline-flex items-center gap-1.5 tabular-nums"
+            >
+              <Icon name="cursor" size={12} className="text-faint" />
+              {t('statusbar.ln_col', { ln: cursorLine, col: cursorColumn })}
+            </span>
+          </>
+        )}
+
+        <span className="h-3 w-px shrink-0 bg-edge" />
+
+        <span
+          className={cn(
+            'inline-flex items-center gap-1.5',
+            running ? 'font-medium text-info' : 'text-mute',
+          )}
+          aria-live="polite"
+        >
+          <span className={cn('relative flex h-2 w-2', running && 'text-info')}>
+            <span
+              className={cn(
+                'inline-flex h-2 w-2 rounded-full',
+                running ? 'animate-pulse bg-info' : 'bg-success',
+              )}
+            />
+          </span>
+          {running ? t('statusbar.running') : t('statusbar.ready')}
+        </span>
+        <span className="h-3 w-px shrink-0 bg-edge" />
         <span className="inline-flex items-center gap-1.5">
           <span
             className={cn(
@@ -68,7 +117,6 @@ export function StatusBar({
           </span>
           {online ? t('general.online') : t('general.offline')}
         </span>
-        <span className="h-3 w-px shrink-0 bg-edge" />
         <button
           onClick={toggle}
           className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 transition-colors hover:bg-raised hover:text-ink"

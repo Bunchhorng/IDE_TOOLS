@@ -330,11 +330,9 @@ class DockerExecutionService
             return $result;
         }
 
-        if ($this->isContainerRunning($name) && is_string($line) && $line !== '') {
+        if ($this->isContainerRunning($name) && is_string($line)) {
             $payload = str_replace(["\r", "\n"], '', $line);
-            if ($payload !== '') {
-                $this->writeFifoLine($execution, $payload);
-            }
+            $this->writeFifoLine($execution, $payload);
         }
 
         return $this->readSessionState($execution);
@@ -387,6 +385,24 @@ class DockerExecutionService
      */
     protected function readSessionState(Execution $execution): array
     {
+        // If a prior call (provideInput or poll) already finalized this session,
+        // the workdir has been cleaned up. Return the persisted DB result
+        // instead of re-reading deleted files, which would wrongly report
+        // "Process terminated unexpectedly".
+        if ($execution->status !== Execution::STATUS_QUEUED
+            && $execution->status !== Execution::STATUS_RUNNING
+        ) {
+            return [
+                'status' => $execution->status,
+                'stdout' => $execution->stdout ?? '',
+                'stderr' => $execution->stderr ?? '',
+                'exit_code' => $execution->exit_code,
+                'execution_time' => $execution->execution_time,
+                'memory_usage' => $execution->memory_usage,
+                'interactive_finished' => true,
+            ];
+        }
+
         $workDir = storage_path('app/executions/'.$execution->id);
         $stdout = $this->readCappedFile($workDir.'/stdout.txt');
         $stderr = $this->readCappedFile($workDir.'/stderr.txt');
