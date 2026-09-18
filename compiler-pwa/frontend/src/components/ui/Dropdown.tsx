@@ -20,7 +20,10 @@ function MenuList({ items, onSelect }: { items: MenuItem[]; onSelect: (item: Men
           key={item.key}
           type="button"
           disabled={item.disabled}
-          onClick={() => onSelect(item)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(item);
+          }}
           className={cn(
             'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors',
             item.danger ? 'text-error hover:bg-error/10' : 'text-ink hover:bg-raised',

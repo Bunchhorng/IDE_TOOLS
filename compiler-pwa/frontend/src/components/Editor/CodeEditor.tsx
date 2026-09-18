@@ -4,6 +4,7 @@ import type { BeforeMount, OnMount } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
 import { useTheme } from '../../context/ThemeContext';
 import { usePreferences } from '../../context/PreferencesContext';
+import { useI18n } from '../../i18n';
 
 interface CodeEditorProps {
   value: string;
@@ -153,6 +154,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const { theme } = useTheme();
   const { prefs } = usePreferences();
+  const { t } = useI18n();
   const monacoLanguage = LANGUAGE_MAP[language] || 'plaintext';
   const monacoTheme = theme === 'dark' ? 'coderunner-dark' : 'coderunner-light';
   const [isMobile, setIsMobile] = useState(
@@ -205,7 +207,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
       onChange={(val) => onChange(val || '')}
       onMount={handleEditorMount}
       loading={
-        <div className={theme === 'dark' ? 'text-[#3b4a63]' : 'text-mute'}>Loading…</div>
+        <div className={theme === 'dark' ? 'text-[#3b4a63]' : 'text-mute'}>{t('general.loading')}</div>
       }
       options={{
         readOnly,

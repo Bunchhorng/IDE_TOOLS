@@ -1,0 +1,2343 @@
+pages/Dashboard/Dashboard.tsx:1:import { useCallback, useEffect, useMemo, useState } from 'react';
+pages/Dashboard/Dashboard.tsx:2:import { Link, useNavigate } from 'react-router-dom';
+pages/Dashboard/Dashboard.tsx:3:import { useAuth } from '../../context/AuthContext';
+pages/Dashboard/Dashboard.tsx:4:import { useToast } from '../../context/ToastContext';
+pages/Dashboard/Dashboard.tsx:5:import { useLocalStorage } from '../../hooks/useLocalStorage';
+pages/Dashboard/Dashboard.tsx:6:import { NewProjectModal } from './NewProjectModal';
+pages/Dashboard/Dashboard.tsx:7:import { Button } from '../../components/ui/Button';
+pages/Dashboard/Dashboard.tsx:8:import { Card } from '../../components/ui/Card';
+pages/Dashboard/Dashboard.tsx:9:import { Input } from '../../components/ui/Input';
+pages/Dashboard/Dashboard.tsx:10:import { EmptyState } from '../../components/ui/EmptyState';
+pages/Dashboard/Dashboard.tsx:11:import { Spinner } from '../../components/ui/Button';
+pages/Dashboard/Dashboard.tsx:12:import { StatusBadge } from '../../components/ui/Badge';
+pages/Dashboard/Dashboard.tsx:13:import { Dropdown } from '../../components/ui/Dropdown';
+pages/Dashboard/Dashboard.tsx:14:import { Modal } from '../../components/ui/Modal';
+pages/Dashboard/Dashboard.tsx:15:import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+pages/Dashboard/Dashboard.tsx:16:import { Icon } from '../../components/ui/Icon';
+pages/Dashboard/Dashboard.tsx:17:import { LanguageIcon, type LangGlyph } from '../../components/LanguageIcon';
+pages/Dashboard/Dashboard.tsx:18:import { InstallPWAButton } from '../../components/InstallPWAButton';
+pages/Dashboard/Dashboard.tsx:19:import { timeAgo, formatExecutionTime } from '../../lib/format';
+pages/Dashboard/Dashboard.tsx:20:import { projectService } from '../../services/projectService';
+pages/Dashboard/Dashboard.tsx:21:import { executionService } from '../../services/executionService';
+pages/Dashboard/Dashboard.tsx:22:import { useI18n } from '../../i18n';
+pages/Dashboard/Dashboard.tsx:23:import type { Project, Execution } from '../../types';
+pages/Dashboard/Dashboard.tsx:24:
+pages/Dashboard/Dashboard.tsx:25:function langGlyphFor(lang: string): LangGlyph {
+pages/Dashboard/Dashboard.tsx:26:  if (lang === 'python') return 'python';
+pages/Dashboard/Dashboard.tsx:27:  if (lang === 'c') return 'c';
+pages/Dashboard/Dashboard.tsx:28:  return 'cpp';
+pages/Dashboard/Dashboard.tsx:29:}
+pages/Dashboard/Dashboard.tsx:30:
+pages/Dashboard/Dashboard.tsx:31:export default function Dashboard() {
+pages/Dashboard/Dashboard.tsx:32:  const { user } = useAuth();
+pages/Dashboard/Dashboard.tsx:33:  const navigate = useNavigate();
+pages/Dashboard/Dashboard.tsx:34:  const toast = useToast();
+pages/Dashboard/Dashboard.tsx:35:  const { t } = useI18n();
+pages/Dashboard/Dashboard.tsx:36:
+pages/Dashboard/Dashboard.tsx:37:  const [projects, setProjects] = useState<Project[]>([]);
+pages/Dashboard/Dashboard.tsx:38:  const [total, setTotal] = useState(0);
+pages/Dashboard/Dashboard.tsx:39:  const [lastPage, setLastPage] = useState(1);
+pages/Dashboard/Dashboard.tsx:40:  const [page, setPage] = useState(1);
+pages/Dashboard/Dashboard.tsx:41:  const [loadingProjects, setLoadingProjects] = useState(true);
+pages/Dashboard/Dashboard.tsx:42:  const [loadingHistory, setLoadingHistory] = useState(true);
+pages/Dashboard/Dashboard.tsx:43:  const [query, setQuery] = useState('');
+pages/Dashboard/Dashboard.tsx:44:  const [showNew, setShowNew] = useState(false);
+pages/Dashboard/Dashboard.tsx:45:  const [executions, setExecutions] = useState<Execution[]>([]);
+pages/Dashboard/Dashboard.tsx:46:  const [executionTotal, setExecutionTotal] = useState(0);
+pages/Dashboard/Dashboard.tsx:47:  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+pages/Dashboard/Dashboard.tsx:48:  const [deleting, setDeleting] = useState(false);
+pages/Dashboard/Dashboard.tsx:49:  const [renameTarget, setRenameTarget] = useState<Project | null>(null);
+pages/Dashboard/Dashboard.tsx:50:  const [renameValue, setRenameValue] = useState('');
+pages/Dashboard/Dashboard.tsx:51:  const [renaming, setRenaming] = useState(false);
+pages/Dashboard/Dashboard.tsx:52:  const [favorites, setFavorites] = useLocalStorage<number[]>('coderunner-favorites', []);
+pages/Dashboard/Dashboard.tsx:53:
+pages/Dashboard/Dashboard.tsx:54:  const loadProjects = useCallback(async (p: number, append = false) => {
+pages/Dashboard/Dashboard.tsx:55:    setLoadingProjects(true);
+pages/Dashboard/Dashboard.tsx:56:    try {
+pages/Dashboard/Dashboard.tsx:57:      const response = await projectService.getAll(p);
+pages/Dashboard/Dashboard.tsx:58:      const data = response.data;
+pages/Dashboard/Dashboard.tsx:59:      setProjects((prev) => (append ? [...prev, ...data.data] : data.data));
+pages/Dashboard/Dashboard.tsx:60:      setTotal(data.total);
+pages/Dashboard/Dashboard.tsx:61:      setLastPage(data.last_page);
+pages/Dashboard/Dashboard.tsx:62:      setPage(data.current_page);
+pages/Dashboard/Dashboard.tsx:63:    } catch {
+pages/Dashboard/Dashboard.tsx:64:      toast.error(t('toast.failed_load_projects'));
+pages/Dashboard/Dashboard.tsx:65:    } finally {
+pages/Dashboard/Dashboard.tsx:66:      setLoadingProjects(false);
+pages/Dashboard/Dashboard.tsx:67:    }
+pages/Dashboard/Dashboard.tsx:68:  }, [toast, t]);
+pages/Dashboard/Dashboard.tsx:69:
+pages/Dashboard/Dashboard.tsx:70:  const loadHistory = useCallback(async () => {
+pages/Dashboard/Dashboard.tsx:71:    setLoadingHistory(true);
+pages/Dashboard/Dashboard.tsx:72:    try {
+pages/Dashboard/Dashboard.tsx:73:      const response = await executionService.getAll(1);
+pages/Dashboard/Dashboard.tsx:74:      setExecutions(response.data.data);
+pages/Dashboard/Dashboard.tsx:75:      setExecutionTotal(response.data.total);
+pages/Dashboard/Dashboard.tsx:76:    } catch {
+pages/Dashboard/Dashboard.tsx:77:      /* history optional */
+pages/Dashboard/Dashboard.tsx:78:    } finally {
+pages/Dashboard/Dashboard.tsx:79:      setLoadingHistory(false);
+pages/Dashboard/Dashboard.tsx:80:    }
+pages/Dashboard/Dashboard.tsx:81:  }, []);
+pages/Dashboard/Dashboard.tsx:82:
+pages/Dashboard/Dashboard.tsx:83:  useEffect(() => {
+pages/Dashboard/Dashboard.tsx:84:    void loadProjects(1);
+pages/Dashboard/Dashboard.tsx:85:    void loadHistory();
+pages/Dashboard/Dashboard.tsx:86:  }, [loadProjects, loadHistory]);
+pages/Dashboard/Dashboard.tsx:87:
+pages/Dashboard/Dashboard.tsx:88:  const filtered = useMemo(() => {
+pages/Dashboard/Dashboard.tsx:89:    const q = query.trim().toLowerCase();
+pages/Dashboard/Dashboard.tsx:90:    if (!q) return projects;
+pages/Dashboard/Dashboard.tsx:91:    return projects.filter(
+pages/Dashboard/Dashboard.tsx:92:      (p) => p.name.toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q),
+pages/Dashboard/Dashboard.tsx:93:    );
+pages/Dashboard/Dashboard.tsx:94:  }, [projects, query]);
+pages/Dashboard/Dashboard.tsx:95:
+pages/Dashboard/Dashboard.tsx:96:  const favoritesFirst = useMemo(() => {
+pages/Dashboard/Dashboard.tsx:97:    const fav = filtered.filter((p) => favorites.includes(p.id));
+pages/Dashboard/Dashboard.tsx:98:    const rest = filtered.filter((p) => !favorites.includes(p.id));
+pages/Dashboard/Dashboard.tsx:99:    return [...fav, ...rest];
+pages/Dashboard/Dashboard.tsx:100:  }, [filtered, favorites]);
+pages/Dashboard/Dashboard.tsx:101:
+pages/Dashboard/Dashboard.tsx:102:  const toggleFavorite = (id: number) => {
+pages/Dashboard/Dashboard.tsx:103:    setFavorites((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
+pages/Dashboard/Dashboard.tsx:104:  };
+pages/Dashboard/Dashboard.tsx:105:
+pages/Dashboard/Dashboard.tsx:106:  const handleDelete = async () => {
+pages/Dashboard/Dashboard.tsx:107:    if (!deleteTarget) return;
+pages/Dashboard/Dashboard.tsx:108:    setDeleting(true);
+pages/Dashboard/Dashboard.tsx:109:    try {
+pages/Dashboard/Dashboard.tsx:110:      await projectService.delete(deleteTarget.id);
+pages/Dashboard/Dashboard.tsx:111:      setProjects((ps) => ps.filter((p) => p.id !== deleteTarget.id));
+pages/Dashboard/Dashboard.tsx:112:      setTotal((t) => Math.max(0, t - 1));
+pages/Dashboard/Dashboard.tsx:113:      toast.success(t('toast.project_deleted'), deleteTarget.name);
+pages/Dashboard/Dashboard.tsx:114:    } catch {
+pages/Dashboard/Dashboard.tsx:115:      toast.error(t('toast.failed_delete_project'));
+pages/Dashboard/Dashboard.tsx:116:    } finally {
+pages/Dashboard/Dashboard.tsx:117:      setDeleting(false);
+pages/Dashboard/Dashboard.tsx:118:      setDeleteTarget(null);
+pages/Dashboard/Dashboard.tsx:119:    }
+pages/Dashboard/Dashboard.tsx:120:  };
+pages/Dashboard/Dashboard.tsx:121:
+pages/Dashboard/Dashboard.tsx:122:  const openRename = (project: Project) => {
+pages/Dashboard/Dashboard.tsx:123:    setRenameTarget(project);
+pages/Dashboard/Dashboard.tsx:124:    setRenameValue(project.name);
+pages/Dashboard/Dashboard.tsx:125:    setRenaming(false);
+pages/Dashboard/Dashboard.tsx:126:  };
+pages/Dashboard/Dashboard.tsx:127:
+pages/Dashboard/Dashboard.tsx:128:  const handleRename = async () => {
+pages/Dashboard/Dashboard.tsx:129:    if (!renameTarget || !renameValue.trim()) return;
+pages/Dashboard/Dashboard.tsx:130:    setRenaming(true);
+pages/Dashboard/Dashboard.tsx:131:    try {
+pages/Dashboard/Dashboard.tsx:132:      const response = await projectService.update(renameTarget.id, { name: renameValue.trim() });
+pages/Dashboard/Dashboard.tsx:133:      const patch = response.data;
+pages/Dashboard/Dashboard.tsx:134:      setProjects((ps) => ps.map((p) => (p.id === patch.id ? { ...p, ...patch } : p)));
+pages/Dashboard/Dashboard.tsx:135:      toast.success(t('toast.project_renamed'), patch.name);
+pages/Dashboard/Dashboard.tsx:136:      setRenameTarget(null);
+pages/Dashboard/Dashboard.tsx:137:    } catch {
+pages/Dashboard/Dashboard.tsx:138:      toast.error(t('toast.failed_rename_project'));
+pages/Dashboard/Dashboard.tsx:139:    } finally {
+pages/Dashboard/Dashboard.tsx:140:      setRenaming(false);
+pages/Dashboard/Dashboard.tsx:141:    }
+pages/Dashboard/Dashboard.tsx:142:  };
+pages/Dashboard/Dashboard.tsx:143:
+pages/Dashboard/Dashboard.tsx:144:  const stats = [
+pages/Dashboard/Dashboard.tsx:145:    {
+pages/Dashboard/Dashboard.tsx:146:      label: t('dashboard.projects'),
+pages/Dashboard/Dashboard.tsx:147:      value: total,
+pages/Dashboard/Dashboard.tsx:148:      icon: 'layers' as const,
+pages/Dashboard/Dashboard.tsx:149:      tint: 'text-info',
+pages/Dashboard/Dashboard.tsx:150:      bg: 'bg-info/10',
+pages/Dashboard/Dashboard.tsx:151:    },
+pages/Dashboard/Dashboard.tsx:152:    {
+pages/Dashboard/Dashboard.tsx:153:      label: t('dashboard.executions'),
+pages/Dashboard/Dashboard.tsx:154:      value: loadingHistory ? '…' : executionTotal,
+pages/Dashboard/Dashboard.tsx:155:      icon: 'zap' as const,
+pages/Dashboard/Dashboard.tsx:156:      tint: 'text-primary',
+pages/Dashboard/Dashboard.tsx:157:      bg: 'bg-primary/10',
+pages/Dashboard/Dashboard.tsx:158:    },
+pages/Dashboard/Dashboard.tsx:159:    {
+pages/Dashboard/Dashboard.tsx:160:      label: t('dashboard.files'),
+pages/Dashboard/Dashboard.tsx:161:      value: projects.reduce((n, p) => n + (p.files?.length ?? 0), 0),
+pages/Dashboard/Dashboard.tsx:162:      icon: 'fileText' as const,
+pages/Dashboard/Dashboard.tsx:163:      tint: 'text-success',
+pages/Dashboard/Dashboard.tsx:164:      bg: 'bg-success/10',
+pages/Dashboard/Dashboard.tsx:165:    },
+pages/Dashboard/Dashboard.tsx:166:  ];
+pages/Dashboard/Dashboard.tsx:167:
+pages/Dashboard/Dashboard.tsx:168:  const hour = new Date().getHours();
+pages/Dashboard/Dashboard.tsx:169:  const greetingKey =
+pages/Dashboard/Dashboard.tsx:170:    hour < 5 ? 'format.night' : hour < 12 ? 'format.morning' : hour < 18 ? 'format.afternoon' : 'format.evening';
+pages/Dashboard/Dashboard.tsx:171:
+pages/Dashboard/Dashboard.tsx:172:  return (
+pages/Dashboard/Dashboard.tsx:173:    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
+pages/Dashboard/Dashboard.tsx:174:      <div className="flex flex-wrap items-end justify-between gap-4">
+pages/Dashboard/Dashboard.tsx:175:        <div>
+pages/Dashboard/Dashboard.tsx:176:          <h1 className="text-2xl font-bold tracking-tight text-ink">
+pages/Dashboard/Dashboard.tsx:177:            {t(greetingKey)},{user?.name.split(' ')[0] ?? 'there'}.
+pages/Dashboard/Dashboard.tsx:178:          </h1>
+pages/Dashboard/Dashboard.tsx:179:          <p className="mt-1 text-sm text-mute">{t('dashboard.subheading')}</p>
+pages/Dashboard/Dashboard.tsx:180:        </div>
+pages/Dashboard/Dashboard.tsx:181:        <div className="flex flex-wrap items-center gap-3">
+pages/Dashboard/Dashboard.tsx:182:          <InstallPWAButton variant="secondary" size="lg" />
+pages/Dashboard/Dashboard.tsx:183:          <Button size="lg" onClick={() => setShowNew(true)}>
+pages/Dashboard/Dashboard.tsx:184:            <Icon name="plus" size={17} />
+pages/Dashboard/Dashboard.tsx:185:            {t('dashboard.new_project')}
+pages/Dashboard/Dashboard.tsx:186:          </Button>
+pages/Dashboard/Dashboard.tsx:187:        </div>
+pages/Dashboard/Dashboard.tsx:188:      </div>
+pages/Dashboard/Dashboard.tsx:189:
+pages/Dashboard/Dashboard.tsx:190:      <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">
+pages/Dashboard/Dashboard.tsx:191:        {stats.map((s) => (
+pages/Dashboard/Dashboard.tsx:192:          <div key={s.label} className="flex items-center gap-3.5 rounded-xl border border-edge bg-panel p-4 shadow-card">
+pages/Dashboard/Dashboard.tsx:193:            <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${s.bg} ${s.tint}`}>
+pages/Dashboard/Dashboard.tsx:194:              <Icon name={s.icon} size={19} />
+pages/Dashboard/Dashboard.tsx:195:            </span>
+pages/Dashboard/Dashboard.tsx:196:            <div>
+pages/Dashboard/Dashboard.tsx:197:              <p className="text-xl font-bold leading-tight text-ink">{s.value}</p>
+pages/Dashboard/Dashboard.tsx:198:              <p className="text-[13px] text-mute">{s.label}</p>
+pages/Dashboard/Dashboard.tsx:199:            </div>
+pages/Dashboard/Dashboard.tsx:200:          </div>
+pages/Dashboard/Dashboard.tsx:201:        ))}
+pages/Dashboard/Dashboard.tsx:202:      </div>
+pages/Dashboard/Dashboard.tsx:203:
+pages/Dashboard/Dashboard.tsx:204:      <div className="mt-10">
+pages/Dashboard/Dashboard.tsx:205:        <div className="flex items-center justify-between gap-3">
+pages/Dashboard/Dashboard.tsx:206:          <h2 className="text-base font-semibold text-ink">{t('dashboard.projects')}</h2>
+pages/Dashboard/Dashboard.tsx:207:          <div className="w-full max-w-56">
+pages/Dashboard/Dashboard.tsx:208:            <Input
+pages/Dashboard/Dashboard.tsx:209:              value={query}
+pages/Dashboard/Dashboard.tsx:210:              onChange={(e) => setQuery(e.target.value)}
+pages/Dashboard/Dashboard.tsx:211:              placeholder={t('dashboard.search_projects')}
+pages/Dashboard/Dashboard.tsx:212:              leftIcon="search"
+pages/Dashboard/Dashboard.tsx:213:            />
+pages/Dashboard/Dashboard.tsx:214:          </div>
+pages/Dashboard/Dashboard.tsx:215:        </div>
+pages/Dashboard/Dashboard.tsx:216:
+pages/Dashboard/Dashboard.tsx:217:        {loadingProjects ? (
+pages/Dashboard/Dashboard.tsx:218:          <div className="flex justify-center py-16">
+pages/Dashboard/Dashboard.tsx:219:            <Spinner size="md" className="text-primary" />
+pages/Dashboard/Dashboard.tsx:220:          </div>
+pages/Dashboard/Dashboard.tsx:221:        ) : favoritesFirst.length === 0 ? (
+pages/Dashboard/Dashboard.tsx:222:          <Card className="mt-4">
+pages/Dashboard/Dashboard.tsx:223:            <EmptyState
+pages/Dashboard/Dashboard.tsx:224:              icon="folder"
+pages/Dashboard/Dashboard.tsx:225:              title={query ? t('dashboard.no_matching') : t('dashboard.no_projects')}
+pages/Dashboard/Dashboard.tsx:226:              message={
+pages/Dashboard/Dashboard.tsx:227:                query
+pages/Dashboard/Dashboard.tsx:228:                  ? t('dashboard.try_different')
+pages/Dashboard/Dashboard.tsx:229:                  : t('dashboard.create_first')
+pages/Dashboard/Dashboard.tsx:230:              }
+pages/Dashboard/Dashboard.tsx:231:              action={
+pages/Dashboard/Dashboard.tsx:232:                !query && (
+pages/Dashboard/Dashboard.tsx:233:                  <Button onClick={() => setShowNew(true)}>
+pages/Dashboard/Dashboard.tsx:234:                    <Icon name="plus" size={15} />
+pages/Dashboard/Dashboard.tsx:235:                    {t('dashboard.new_project')}
+pages/Dashboard/Dashboard.tsx:236:                  </Button>
+pages/Dashboard/Dashboard.tsx:237:                )
+pages/Dashboard/Dashboard.tsx:238:              }
+pages/Dashboard/Dashboard.tsx:239:            />
+pages/Dashboard/Dashboard.tsx:240:          </Card>
+pages/Dashboard/Dashboard.tsx:241:        ) : (
+pages/Dashboard/Dashboard.tsx:242:          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+pages/Dashboard/Dashboard.tsx:243:            {favoritesFirst.map((project) => {
+pages/Dashboard/Dashboard.tsx:244:              const glyphs = Array.from(
+pages/Dashboard/Dashboard.tsx:245:                new Set((project.files ?? []).map((f) => f.language)),
+pages/Dashboard/Dashboard.tsx:246:              ).slice(0, 3);
+pages/Dashboard/Dashboard.tsx:247:              const fav = favorites.includes(project.id);
+pages/Dashboard/Dashboard.tsx:248:              return (
+pages/Dashboard/Dashboard.tsx:249:                <Card key={project.id} className="group">
+pages/Dashboard/Dashboard.tsx:250:                  <button
+pages/Dashboard/Dashboard.tsx:251:                    onClick={() => navigate(`/editor/${project.id}`)}
+pages/Dashboard/Dashboard.tsx:252:                    className="block w-full p-4 text-left"
+pages/Dashboard/Dashboard.tsx:253:                  >
+pages/Dashboard/Dashboard.tsx:254:                    <div className="mb-3 flex items-start justify-between gap-2">
+pages/Dashboard/Dashboard.tsx:255:                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+pages/Dashboard/Dashboard.tsx:256:                        <Icon name="folder" size={17} />
+pages/Dashboard/Dashboard.tsx:257:                      </span>
+pages/Dashboard/Dashboard.tsx:258:                      <div className="flex items-center gap-1">
+pages/Dashboard/Dashboard.tsx:259:                        <button
+pages/Dashboard/Dashboard.tsx:260:                          onClick={(e) => {
+pages/Dashboard/Dashboard.tsx:261:                            e.stopPropagation();
+pages/Dashboard/Dashboard.tsx:262:                            toggleFavorite(project.id);
+pages/Dashboard/Dashboard.tsx:263:                          }}
+pages/Dashboard/Dashboard.tsx:264:                          className="rounded-md p-1.5 transition-colors hover:bg-raised"
+pages/Dashboard/Dashboard.tsx:265:                          aria-label={fav ? t('dashboard.fav_remove') : t('dashboard.fav_add')}
+pages/Dashboard/Dashboard.tsx:266:                        >
+pages/Dashboard/Dashboard.tsx:267:                          <Icon
+pages/Dashboard/Dashboard.tsx:268:                            name="star"
+pages/Dashboard/Dashboard.tsx:269:                            size={15}
+pages/Dashboard/Dashboard.tsx:270:                            className={fav ? 'text-warning fill-current' : 'text-faint'}
+pages/Dashboard/Dashboard.tsx:271:                          />
+pages/Dashboard/Dashboard.tsx:272:                        </button>
+pages/Dashboard/Dashboard.tsx:273:                        <Dropdown
+pages/Dashboard/Dashboard.tsx:274:                          align="right"
+pages/Dashboard/Dashboard.tsx:275:                          trigger={
+pages/Dashboard/Dashboard.tsx:276:                            <span className="rounded-md p-1.5 text-faint transition-colors hover:bg-raised hover:text-ink">
+pages/Dashboard/Dashboard.tsx:277:                              <Icon name="moreV" size={15} />
+pages/Dashboard/Dashboard.tsx:278:                            </span>
+pages/Dashboard/Dashboard.tsx:279:                          }
+pages/Dashboard/Dashboard.tsx:280:                          items={[
+pages/Dashboard/Dashboard.tsx:281:                            {
+pages/Dashboard/Dashboard.tsx:282:                              key: 'open',
+pages/Dashboard/Dashboard.tsx:283:                              label: t('dashboard.open'),
+pages/Dashboard/Dashboard.tsx:284:                              icon: 'external',
+pages/Dashboard/Dashboard.tsx:285:                              onSelect: () => navigate(`/editor/${project.id}`),
+pages/Dashboard/Dashboard.tsx:286:                            },
+pages/Dashboard/Dashboard.tsx:287:                            {
+pages/Dashboard/Dashboard.tsx:288:                              key: 'home',
+pages/Dashboard/Dashboard.tsx:289:                              label: t('dashboard.view_history'),
+pages/Dashboard/Dashboard.tsx:290:                              icon: 'clock',
+pages/Dashboard/Dashboard.tsx:291:                              onSelect: () => navigate('/history'),
+pages/Dashboard/Dashboard.tsx:292:                            },
+pages/Dashboard/Dashboard.tsx:293:                            {
+pages/Dashboard/Dashboard.tsx:294:                              key: 'rename',
+pages/Dashboard/Dashboard.tsx:295:                              label: t('dashboard.rename'),
+pages/Dashboard/Dashboard.tsx:296:                              icon: 'pencil',
+pages/Dashboard/Dashboard.tsx:297:                              onSelect: () => openRename(project),
+pages/Dashboard/Dashboard.tsx:298:                            },
+pages/Dashboard/Dashboard.tsx:299:                            {
+pages/Dashboard/Dashboard.tsx:300:                              key: 'delete',
+pages/Dashboard/Dashboard.tsx:301:                              label: t('dashboard.delete'),
+pages/Dashboard/Dashboard.tsx:302:                              icon: 'trash',
+pages/Dashboard/Dashboard.tsx:303:                              danger: true,
+pages/Dashboard/Dashboard.tsx:304:                              onSelect: () => setDeleteTarget(project),
+pages/Dashboard/Dashboard.tsx:305:                            },
+pages/Dashboard/Dashboard.tsx:306:                          ]}
+pages/Dashboard/Dashboard.tsx:307:                        />
+pages/Dashboard/Dashboard.tsx:308:                      </div>
+pages/Dashboard/Dashboard.tsx:309:                    </div>
+pages/Dashboard/Dashboard.tsx:310:                    <h3 className="truncate text-sm font-semibold text-ink">{project.name}</h3>
+pages/Dashboard/Dashboard.tsx:311:                    <p className="mt-0.5 line-clamp-2 min-h-8 text-[13px] text-mute">
+pages/Dashboard/Dashboard.tsx:312:                      {project.description || t('dashboard.no_description')}
+pages/Dashboard/Dashboard.tsx:313:                    </p>
+pages/Dashboard/Dashboard.tsx:314:                    <div className="mt-3 flex items-center justify-between text-[11px] text-faint">
+pages/Dashboard/Dashboard.tsx:315:                      <span className="inline-flex items-center gap-1">
+pages/Dashboard/Dashboard.tsx:316:                        <Icon name="fileText" size={12} />
+pages/Dashboard/Dashboard.tsx:317:                        {project.files?.length ?? 0} {(project.files?.length ?? 0) === 1 ? t('dashboard.file') : t('dashboard.files_suffix')}
+pages/Dashboard/Dashboard.tsx:318:                      </span>
+pages/Dashboard/Dashboard.tsx:319:                      <span>{timeAgo(project.updated_at)}</span>
+pages/Dashboard/Dashboard.tsx:320:                    </div>
+pages/Dashboard/Dashboard.tsx:321:                  </button>
+pages/Dashboard/Dashboard.tsx:322:                  {glyphs.length > 0 && (
+pages/Dashboard/Dashboard.tsx:323:                    <div className="flex items-center gap-1.5 border-t border-edge px-4 py-2.5">
+pages/Dashboard/Dashboard.tsx:324:                      {glyphs.map((g) => (
+pages/Dashboard/Dashboard.tsx:325:                        <LanguageIcon key={g} lang={langGlyphFor(g)} size="sm" />
+pages/Dashboard/Dashboard.tsx:326:                      ))}
+pages/Dashboard/Dashboard.tsx:327:                      <span className="ml-auto">
+pages/Dashboard/Dashboard.tsx:328:                        <Link
+pages/Dashboard/Dashboard.tsx:329:                          to={`/editor/${project.id}`}
+pages/Dashboard/Dashboard.tsx:330:                          className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+pages/Dashboard/Dashboard.tsx:331:                        >
+pages/Dashboard/Dashboard.tsx:332:                          {t('dashboard.open_editor')}
+pages/Dashboard/Dashboard.tsx:333:                          <Icon name="arrowRight" size={12} />
+pages/Dashboard/Dashboard.tsx:334:                        </Link>
+pages/Dashboard/Dashboard.tsx:335:                      </span>
+pages/Dashboard/Dashboard.tsx:336:                    </div>
+pages/Dashboard/Dashboard.tsx:337:                  )}
+pages/Dashboard/Dashboard.tsx:338:                </Card>
+pages/Dashboard/Dashboard.tsx:339:              );
+pages/Dashboard/Dashboard.tsx:340:            })}
+pages/Dashboard/Dashboard.tsx:341:          </div>
+pages/Dashboard/Dashboard.tsx:342:        )}
+pages/Dashboard/Dashboard.tsx:343:
+pages/Dashboard/Dashboard.tsx:344:        {page < lastPage && (
+pages/Dashboard/Dashboard.tsx:345:          <div className="mt-6 flex justify-center">
+pages/Dashboard/Dashboard.tsx:346:            <Button
+pages/Dashboard/Dashboard.tsx:347:              variant="secondary"
+pages/Dashboard/Dashboard.tsx:348:              onClick={() => void loadProjects(page + 1, true)}
+pages/Dashboard/Dashboard.tsx:349:              disabled={loadingProjects}
+pages/Dashboard/Dashboard.tsx:350:            >
+pages/Dashboard/Dashboard.tsx:351:              <Icon name="chevronDown" size={15} />
+pages/Dashboard/Dashboard.tsx:352:              {t('dashboard.load_more')}
+pages/Dashboard/Dashboard.tsx:353:            </Button>
+pages/Dashboard/Dashboard.tsx:354:          </div>
+pages/Dashboard/Dashboard.tsx:355:        )}
+pages/Dashboard/Dashboard.tsx:356:      </div>
+pages/Dashboard/Dashboard.tsx:357:
+pages/Dashboard/Dashboard.tsx:358:      <section className="mt-12">
+pages/Dashboard/Dashboard.tsx:359:        <div className="flex items-center justify-between">
+pages/Dashboard/Dashboard.tsx:360:          <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+pages/Dashboard/Dashboard.tsx:361:            <Icon name="clock" size={16} className="text-faint" />
+pages/Dashboard/Dashboard.tsx:362:            {t('dashboard.recent_executions')}
+pages/Dashboard/Dashboard.tsx:363:          </h2>
+pages/Dashboard/Dashboard.tsx:364:          <Link
+pages/Dashboard/Dashboard.tsx:365:            to="/history"
+pages/Dashboard/Dashboard.tsx:366:            className="inline-flex items-center gap-1 text-[13px] font-medium text-primary hover:underline"
+pages/Dashboard/Dashboard.tsx:367:          >
+pages/Dashboard/Dashboard.tsx:368:            {t('dashboard.view_all')}
+pages/Dashboard/Dashboard.tsx:369:            <Icon name="arrowRight" size={14} />
+pages/Dashboard/Dashboard.tsx:370:          </Link>
+pages/Dashboard/Dashboard.tsx:371:        </div>
+pages/Dashboard/Dashboard.tsx:372:
+pages/Dashboard/Dashboard.tsx:373:        {loadingHistory ? (
+pages/Dashboard/Dashboard.tsx:374:          <div className="flex justify-center py-10">
+pages/Dashboard/Dashboard.tsx:375:            <Spinner size="sm" className="text-primary" />
+pages/Dashboard/Dashboard.tsx:376:          </div>
+pages/Dashboard/Dashboard.tsx:377:        ) : executions.length === 0 ? (
+pages/Dashboard/Dashboard.tsx:378:          <Card className="mt-3">
+pages/Dashboard/Dashboard.tsx:379:            <EmptyState
+pages/Dashboard/Dashboard.tsx:380:              compact
+pages/Dashboard/Dashboard.tsx:381:              icon="terminal"
+pages/Dashboard/Dashboard.tsx:382:              title={t('dashboard.no_ran_yet')}
+pages/Dashboard/Dashboard.tsx:383:              message={t('dashboard.run_first')}
+pages/Dashboard/Dashboard.tsx:384:            />
+pages/Dashboard/Dashboard.tsx:385:          </Card>
+pages/Dashboard/Dashboard.tsx:386:        ) : (
+pages/Dashboard/Dashboard.tsx:387:          <Card className="mt-3 divide-y divide-edge overflow-hidden">
+pages/Dashboard/Dashboard.tsx:388:            {executions.slice(0, 5).map((e) => (
+pages/Dashboard/Dashboard.tsx:389:              <div key={e.id} className="flex items-center gap-3 px-4 py-3">
+pages/Dashboard/Dashboard.tsx:390:                <LanguageIcon lang="file" size="sm" />
+pages/Dashboard/Dashboard.tsx:391:                <div className="min-w-0 flex-1">
+pages/Dashboard/Dashboard.tsx:392:                  <p className="truncate text-[13px] font-medium text-ink">
+pages/Dashboard/Dashboard.tsx:393:                    {e.filename ?? t('dashboard.untitled')}
+pages/Dashboard/Dashboard.tsx:394:                  </p>
+pages/Dashboard/Dashboard.tsx:395:                  <p className="text-[11px] text-faint">{timeAgo(e.created_at)}</p>
+pages/Dashboard/Dashboard.tsx:396:                </div>
+pages/Dashboard/Dashboard.tsx:397:                {e.execution_time !== null && (
+pages/Dashboard/Dashboard.tsx:398:                  <span className="hidden font-mono text-[11px] text-mute sm:block">
+pages/Dashboard/Dashboard.tsx:399:                    {formatExecutionTime(e.execution_time)}
+pages/Dashboard/Dashboard.tsx:400:                  </span>
+pages/Dashboard/Dashboard.tsx:401:                )}
+pages/Dashboard/Dashboard.tsx:402:                <StatusBadge status={e.status} />
+pages/Dashboard/Dashboard.tsx:403:              </div>
+pages/Dashboard/Dashboard.tsx:404:            ))}
+pages/Dashboard/Dashboard.tsx:405:          </Card>
+pages/Dashboard/Dashboard.tsx:406:        )}
+pages/Dashboard/Dashboard.tsx:407:      </section>
+pages/Dashboard/Dashboard.tsx:408:
+pages/Dashboard/Dashboard.tsx:409:      <NewProjectModal open={showNew} onClose={() => setShowNew(false)} />
+pages/Dashboard/Dashboard.tsx:410:
+pages/Dashboard/Dashboard.tsx:411:      <Modal
+pages/Dashboard/Dashboard.tsx:412:        open={!!renameTarget}
+pages/Dashboard/Dashboard.tsx:413:        onClose={() => !renaming && setRenameTarget(null)}
+pages/Dashboard/Dashboard.tsx:414:        title={t('dashboard.rename_title')}
+pages/Dashboard/Dashboard.tsx:415:        description={t('dashboard.rename_desc')}
+pages/Dashboard/Dashboard.tsx:416:        size="sm"
+pages/Dashboard/Dashboard.tsx:417:        footer={
+pages/Dashboard/Dashboard.tsx:418:          <>
+pages/Dashboard/Dashboard.tsx:419:            <Button
+pages/Dashboard/Dashboard.tsx:420:              variant="secondary"
+pages/Dashboard/Dashboard.tsx:421:              onClick={() => setRenameTarget(null)}
+pages/Dashboard/Dashboard.tsx:422:              disabled={renaming}
+pages/Dashboard/Dashboard.tsx:423:            >
+pages/Dashboard/Dashboard.tsx:424:              {t('dialog.cancel')}
+pages/Dashboard/Dashboard.tsx:425:            </Button>
+pages/Dashboard/Dashboard.tsx:426:            <Button
+pages/Dashboard/Dashboard.tsx:427:              onClick={() => void handleRename()}
+pages/Dashboard/Dashboard.tsx:428:              loading={renaming}
+pages/Dashboard/Dashboard.tsx:429:              disabled={!renameValue.trim()}
+pages/Dashboard/Dashboard.tsx:430:            >
+pages/Dashboard/Dashboard.tsx:431:              <Icon name="check" size={15} />
+pages/Dashboard/Dashboard.tsx:432:              {t('dashboard.rename_save')}
+pages/Dashboard/Dashboard.tsx:433:            </Button>
+pages/Dashboard/Dashboard.tsx:434:          </>
+pages/Dashboard/Dashboard.tsx:435:        }
+pages/Dashboard/Dashboard.tsx:436:      >
+pages/Dashboard/Dashboard.tsx:437:        <Input
+pages/Dashboard/Dashboard.tsx:438:          value={renameValue}
+pages/Dashboard/Dashboard.tsx:439:          onChange={(e) => setRenameValue(e.target.value)}
+pages/Dashboard/Dashboard.tsx:440:          onKeyDown={(e) => {
+pages/Dashboard/Dashboard.tsx:441:            if (e.key === 'Enter') void handleRename();
+pages/Dashboard/Dashboard.tsx:442:          }}
+pages/Dashboard/Dashboard.tsx:443:          placeholder={t('dashboard.rename_placeholder')}
+pages/Dashboard/Dashboard.tsx:444:          autoFocus
+pages/Dashboard/Dashboard.tsx:445:        />
+pages/Dashboard/Dashboard.tsx:446:      </Modal>
+pages/Dashboard/Dashboard.tsx:447:
+pages/Dashboard/Dashboard.tsx:448:      <ConfirmDialog
+pages/Dashboard/Dashboard.tsx:449:        open={!!deleteTarget}
+pages/Dashboard/Dashboard.tsx:450:        onClose={() => setDeleteTarget(null)}
+pages/Dashboard/Dashboard.tsx:451:        onConfirm={() => void handleDelete()}
+pages/Dashboard/Dashboard.tsx:452:        loading={deleting}
+pages/Dashboard/Dashboard.tsx:453:        title={t('dashboard.delete_title', { name: deleteTarget?.name ?? '' })}
+pages/Dashboard/Dashboard.tsx:454:        message={t('dashboard.delete_msg')}
+pages/Dashboard/Dashboard.tsx:455:        confirmLabel={t('dashboard.delete_btn')}
+pages/Dashboard/Dashboard.tsx:456:      />
+pages/Dashboard/Dashboard.tsx:457:    </main>
+pages/Dashboard/Dashboard.tsx:458:  );
+pages/Dashboard/Dashboard.tsx:459:}
+pages/Editor/EditorPage.tsx:1:import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+pages/Editor/EditorPage.tsx:2:import { useParams, useNavigate } from 'react-router-dom';
+pages/Editor/EditorPage.tsx:3:import CodeEditor, { type CodeEditorHandle } from '../../components/Editor/CodeEditor';
+pages/Editor/EditorPage.tsx:4:import type { ConsoleInputHandle } from '../../components/Terminal/ConsoleInput';
+pages/Editor/EditorPage.tsx:5:import type { TerminalPanelHandle } from '../../components/Terminal/TerminalPanel';
+pages/Editor/EditorPage.tsx:6:import { EditorTabs } from '../../components/Editor/EditorTabs';
+pages/Editor/EditorPage.tsx:7:import { EditorTopBar } from '../../components/Editor/EditorTopBar';
+pages/Editor/EditorPage.tsx:8:import { StatusBar } from '../../components/Editor/StatusBar';
+pages/Editor/EditorPage.tsx:9:import { FileExplorerSidebar } from '../../components/FileExplorer/FileExplorerSidebar';
+pages/Editor/EditorPage.tsx:10:import { TerminalPanel } from '../../components/Terminal/TerminalPanel';
+pages/Editor/EditorPage.tsx:11:import type { PanelTab } from '../../components/Terminal/TerminalPanel';
+pages/Editor/EditorPage.tsx:12:import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+pages/Editor/EditorPage.tsx:13:import { LanguageIcon } from '../../components/LanguageIcon';
+pages/Editor/EditorPage.tsx:14:import { EmptyState } from '../../components/ui/EmptyState';
+pages/Editor/EditorPage.tsx:15:import { Button } from '../../components/ui/Button';
+pages/Editor/EditorPage.tsx:16:import { BottomSheet } from '../../components/ui/BottomSheet';
+pages/Editor/EditorPage.tsx:17:import { Icon } from '../../components/ui/Icon';
+pages/Editor/EditorPage.tsx:18:import { Spinner } from '../../components/ui/Button';
+pages/Editor/EditorPage.tsx:19:import { useResizable } from '../../hooks/useResizable';
+pages/Editor/EditorPage.tsx:20:import { useResizableX } from '../../hooks/useResizableX';
+pages/Editor/EditorPage.tsx:21:import { cn } from '../../lib/cn';
+pages/Editor/EditorPage.tsx:22:import { getTemplateContent } from '../../lib/templates';
+pages/Editor/EditorPage.tsx:23:import { detectLanguage } from '../../lib/languages';
+pages/Editor/EditorPage.tsx:24:import { isInputStarved } from '../../lib/errorHints';
+pages/Editor/EditorPage.tsx:25:import { codeNeedsInput } from '../../lib/needsInput';
+pages/Editor/EditorPage.tsx:26:import { useTheme } from '../../context/ThemeContext';
+pages/Editor/EditorPage.tsx:27:import { useToast } from '../../context/ToastContext';
+pages/Editor/EditorPage.tsx:28:import { usePreferences } from '../../context/PreferencesContext';
+pages/Editor/EditorPage.tsx:29:import { useI18n } from '../../i18n';
+pages/Editor/EditorPage.tsx:30:import { setSuppress401Reload } from '../../services/api';
+pages/Editor/EditorPage.tsx:31:import { projectService } from '../../services/projectService';
+pages/Editor/EditorPage.tsx:32:import { fileService } from '../../services/fileService';
+pages/Editor/EditorPage.tsx:33:import { folderService } from '../../services/folderService';
+pages/Editor/EditorPage.tsx:34:import { executionService } from '../../services/executionService';
+pages/Editor/EditorPage.tsx:35:import { languageService } from '../../services/languageService';
+pages/Editor/EditorPage.tsx:36:import type { Project, File, Folder, Language, Execution } from '../../types';
+pages/Editor/EditorPage.tsx:37:
+pages/Editor/EditorPage.tsx:38:type MobileTab = 'code' | 'files' | 'output' | 'more';
+pages/Editor/EditorPage.tsx:39:
+pages/Editor/EditorPage.tsx:40:export default function EditorPage() {
+pages/Editor/EditorPage.tsx:41:  const { projectId } = useParams<{ projectId: string }>();
+pages/Editor/EditorPage.tsx:42:  const navigate = useNavigate();
+pages/Editor/EditorPage.tsx:43:  const { theme, toggle } = useTheme();
+pages/Editor/EditorPage.tsx:44:  const toast = useToast();
+pages/Editor/EditorPage.tsx:45:  const { prefs } = usePreferences();
+pages/Editor/EditorPage.tsx:46:  const { t } = useI18n();
+pages/Editor/EditorPage.tsx:47:
+pages/Editor/EditorPage.tsx:48:  const [project, setProject] = useState<Project | null>(null);
+pages/Editor/EditorPage.tsx:49:  const [files, setFiles] = useState<File[]>([]);
+pages/Editor/EditorPage.tsx:50:  const [folders, setFolders] = useState<Folder[]>([]);
+pages/Editor/EditorPage.tsx:51:  /** Editor tabs (open files) in display order — closing a tab removes it here only. */
+pages/Editor/EditorPage.tsx:52:  const [openFileIds, setOpenFileIds] = useState<number[]>([]);
+pages/Editor/EditorPage.tsx:53:  const [activeFile, setActiveFile] = useState<File | null>(null);
+pages/Editor/EditorPage.tsx:54:  const [savedContent, setSavedContent] = useState('');
+pages/Editor/EditorPage.tsx:55:  const [savedLanguage, setSavedLanguage] = useState('cpp');
+pages/Editor/EditorPage.tsx:56:  const [languages, setLanguages] = useState<Language[]>([]);
+pages/Editor/EditorPage.tsx:57:  const [loading, setLoading] = useState(true);
+pages/Editor/EditorPage.tsx:58:  const [stdin, setStdin] = useState('');
+pages/Editor/EditorPage.tsx:59:  const [inputLines, setInputLines] = useState<string[]>([]);
+pages/Editor/EditorPage.tsx:60:  const [execution, setExecution] = useState<Execution | null>(null);
+pages/Editor/EditorPage.tsx:61:  const [isRunning, setIsRunning] = useState(false);
+pages/Editor/EditorPage.tsx:62:  const [cursor, setCursor] = useState({ line: 1, column: 1 });
+pages/Editor/EditorPage.tsx:63:  const [isSaving, setIsSaving] = useState(false);
+pages/Editor/EditorPage.tsx:64:  /** Active interactive session: the sandbox id of the running program. */
+pages/Editor/EditorPage.tsx:65:  const [liveSessionId, setLiveSessionId] = useState<number | null>(null);
+pages/Editor/EditorPage.tsx:66:  /** Live PTY stream (base64 raw bytes) of the running interactive program. */
+pages/Editor/EditorPage.tsx:67:  const [liveOutputB64, setLiveOutputB64] = useState('');
+pages/Editor/EditorPage.tsx:68:  /** Mirror of liveOutputB64 for the poll loop (avoid stale closures). */
+pages/Editor/EditorPage.tsx:69:  const liveOutputB64Ref = useRef('');
+pages/Editor/EditorPage.tsx:70:  /** The sandbox capped stdout/stderr during this live session. */
+pages/Editor/EditorPage.tsx:71:  const [liveTruncated, setLiveTruncated] = useState(false);
+pages/Editor/EditorPage.tsx:72:  /** True once a live session has ended (exited or stopped) — the xterm canvas
+pages/Editor/EditorPage.tsx:73:   *  stays mounted as one continuous session and shows a final status line. */
+pages/Editor/EditorPage.tsx:74:  const [liveFinished, setLiveFinished] = useState(false);
+pages/Editor/EditorPage.tsx:75:  const [mobileTab, setMobileTab] = useState<MobileTab>('code');
+pages/Editor/EditorPage.tsx:76:  const [terminalTab, setTerminalTab] = useState<PanelTab>('terminal');
+pages/Editor/EditorPage.tsx:77:  const [moreOpen, setMoreOpen] = useState(false);
+pages/Editor/EditorPage.tsx:78:  const [deleteTarget, setDeleteTarget] = useState<{ kind: 'file' | 'folder'; item: File | Folder } | null>(null);
+pages/Editor/EditorPage.tsx:79:  const [deleting, setDeleting] = useState(false);
+pages/Editor/EditorPage.tsx:80:  const editorRef = useRef<CodeEditorHandle>(null);
+pages/Editor/EditorPage.tsx:81:  const consoleRef = useRef<ConsoleInputHandle>(null);
+pages/Editor/EditorPage.tsx:82:  const terminalPanelRef = useRef<TerminalPanelHandle>(null);
+pages/Editor/EditorPage.tsx:83:  /** Always points at the latest handleRun (used by stale-safe callbacks). */
+pages/Editor/EditorPage.tsx:84:  const handleRunRef = useRef<(continueSession?: boolean) => Promise<void>>(async () => {});
+pages/Editor/EditorPage.tsx:85:  /** Mirror of isRunning for stale-safe callbacks (auto-run guard). */
+pages/Editor/EditorPage.tsx:86:  const isRunningRef = useRef(false);
+pages/Editor/EditorPage.tsx:87:  /** True when a run ended starved of input — the next committed line re-runs. */
+pages/Editor/EditorPage.tsx:88:  const awaitingInputRef = useRef(false);
+pages/Editor/EditorPage.tsx:89:  /** Mirror of `dirty` for the beforeunload guard. */
+pages/Editor/EditorPage.tsx:90:  const dirtyRef = useRef(false);
+pages/Editor/EditorPage.tsx:91:  /** True while an interactive session is in flight (used by cleanups). */
+pages/Editor/EditorPage.tsx:92:  const liveActiveRef = useRef(false);
+pages/Editor/EditorPage.tsx:93:  /** Interactive session id for the poll loop / submit / stop. */
+pages/Editor/EditorPage.tsx:94:  const liveSessionIdRef = useRef<number | null>(null);
+pages/Editor/EditorPage.tsx:95:  /** Mirror of the echoed input lines (used by the poll stop/finish finalizers). */
+pages/Editor/EditorPage.tsx:96:  const inputLinesRef = useRef<string[]>([]);
+pages/Editor/EditorPage.tsx:97:  /** Poll handle for live interactive sessions — cleared on finish/stop/unmount. */
+pages/Editor/EditorPage.tsx:98:  const pollTimerRef = useRef<number | null>(null);
+pages/Editor/EditorPage.tsx:99:  /** Bumped on every begin/abort so stale async finalizers can't clobber the
+pages/Editor/EditorPage.tsx:100:      terminal after a stop, file switch, or new run. */
+pages/Editor/EditorPage.tsx:101:  const sessionTokenRef = useRef(0);
+pages/Editor/EditorPage.tsx:102:  /** Mirror of interactive-eligible for the stale-safe auto-run guard. */
+pages/Editor/EditorPage.tsx:103:  const interactiveEligibleRef = useRef(false);
+pages/Editor/EditorPage.tsx:104:  const panel = useResizable({
+pages/Editor/EditorPage.tsx:105:    initial: 240,
+pages/Editor/EditorPage.tsx:106:    min: 80,
+pages/Editor/EditorPage.tsx:107:    initialCollapsed:
+pages/Editor/EditorPage.tsx:108:      typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches,
+pages/Editor/EditorPage.tsx:109:  });
+pages/Editor/EditorPage.tsx:110:  const sidebar = useResizableX({ initial: 240, min: 140 });
+pages/Editor/EditorPage.tsx:111:
+pages/Editor/EditorPage.tsx:112:  const pId = Number(projectId);
+pages/Editor/EditorPage.tsx:113:  const dirty =
+pages/Editor/EditorPage.tsx:114:    !!activeFile &&
+pages/Editor/EditorPage.tsx:115:    (activeFile.content !== savedContent || activeFile.language !== savedLanguage);
+pages/Editor/EditorPage.tsx:116:  /** The run ended because stdin ran dry — the code is fine, input was missing. */
+pages/Editor/EditorPage.tsx:117:  const inputStarved = useMemo(
+pages/Editor/EditorPage.tsx:118:    () => !!execution && !isRunning && isInputStarved(execution.stderr),
+pages/Editor/EditorPage.tsx:119:    [execution, isRunning],
+pages/Editor/EditorPage.tsx:120:  );
+pages/Editor/EditorPage.tsx:121:  const hasErrors = useMemo(
+pages/Editor/EditorPage.tsx:122:    () =>
+pages/Editor/EditorPage.tsx:123:      !!execution &&
+pages/Editor/EditorPage.tsx:124:      !inputStarved &&
+pages/Editor/EditorPage.tsx:125:      (['compile_error', 'runtime_error', 'timeout', 'memory_limit', 'system_error', 'failed'].includes(execution.status) ||
+pages/Editor/EditorPage.tsx:126:        !!execution.stderr),
+pages/Editor/EditorPage.tsx:127:    [execution, inputStarved],
+pages/Editor/EditorPage.tsx:128:  );
+pages/Editor/EditorPage.tsx:129:
+pages/Editor/EditorPage.tsx:130:  useEffect(() => {
+pages/Editor/EditorPage.tsx:131:    dirtyRef.current = dirty;
+pages/Editor/EditorPage.tsx:132:  }, [dirty]);
+pages/Editor/EditorPage.tsx:133:
+pages/Editor/EditorPage.tsx:134:  useEffect(() => {
+pages/Editor/EditorPage.tsx:135:    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+pages/Editor/EditorPage.tsx:136:      if (!dirtyRef.current) return;
+pages/Editor/EditorPage.tsx:137:      e.preventDefault();
+pages/Editor/EditorPage.tsx:138:      e.returnValue = '';
+pages/Editor/EditorPage.tsx:139:    };
+pages/Editor/EditorPage.tsx:140:    window.addEventListener('beforeunload', onBeforeUnload);
+pages/Editor/EditorPage.tsx:141:    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+pages/Editor/EditorPage.tsx:142:  }, []);
+pages/Editor/EditorPage.tsx:143:
+pages/Editor/EditorPage.tsx:144:  /** Open tabs in display order (project files still visible in the explorer). */
+pages/Editor/EditorPage.tsx:145:  const openFiles = useMemo(() => {
+pages/Editor/EditorPage.tsx:146:    const byId = new Map(files.map((f) => [f.id, f]));
+pages/Editor/EditorPage.tsx:147:    return openFileIds.map((id) => byId.get(id)).filter((f): f is File => !!f);
+pages/Editor/EditorPage.tsx:148:  }, [files, openFileIds]);
+pages/Editor/EditorPage.tsx:149:
+pages/Editor/EditorPage.tsx:150:  const loadProject = useCallback(async () => {
+pages/Editor/EditorPage.tsx:151:    if (!projectId) return;
+pages/Editor/EditorPage.tsx:152:    try {
+pages/Editor/EditorPage.tsx:153:      const response = await projectService.getById(Number(projectId));
+pages/Editor/EditorPage.tsx:154:      setProject(response.data);
+pages/Editor/EditorPage.tsx:155:    } catch {
+pages/Editor/EditorPage.tsx:156:      toast.error(t('toast.project_not_found'));
+pages/Editor/EditorPage.tsx:157:      navigate('/dashboard');
+pages/Editor/EditorPage.tsx:158:    }
+pages/Editor/EditorPage.tsx:159:  }, [projectId, navigate, toast, t]);
+pages/Editor/EditorPage.tsx:160:
+pages/Editor/EditorPage.tsx:161:  const loadFiles = useCallback(async () => {
+pages/Editor/EditorPage.tsx:162:    if (!projectId) return;
+pages/Editor/EditorPage.tsx:163:    try {
+pages/Editor/EditorPage.tsx:164:      const response = await fileService.getByProject(Number(projectId));
+pages/Editor/EditorPage.tsx:165:      setFiles(response.data);
+pages/Editor/EditorPage.tsx:166:      if (response.data.length > 0) {
+pages/Editor/EditorPage.tsx:167:        const first = response.data[0];
+pages/Editor/EditorPage.tsx:168:        setOpenFileIds([first.id]);
+pages/Editor/EditorPage.tsx:169:        setActiveFile(first);
+pages/Editor/EditorPage.tsx:170:        setSavedContent(first.content);
+pages/Editor/EditorPage.tsx:171:        setSavedLanguage(first.language);
+pages/Editor/EditorPage.tsx:172:      }
+pages/Editor/EditorPage.tsx:173:    } catch {
+pages/Editor/EditorPage.tsx:174:      toast.error(t('toast.failed_load_files'));
+pages/Editor/EditorPage.tsx:175:    } finally {
+pages/Editor/EditorPage.tsx:176:      setLoading(false);
+pages/Editor/EditorPage.tsx:177:    }
+pages/Editor/EditorPage.tsx:178:  }, [projectId, toast, t]);
+pages/Editor/EditorPage.tsx:179:
+pages/Editor/EditorPage.tsx:180:  const loadFolders = useCallback(async () => {
+pages/Editor/EditorPage.tsx:181:    if (!projectId) return;
+pages/Editor/EditorPage.tsx:182:    try {
+pages/Editor/EditorPage.tsx:183:      const response = await folderService.getByProject(Number(projectId));
+pages/Editor/EditorPage.tsx:184:      setFolders(response.data);
+pages/Editor/EditorPage.tsx:185:    } catch {
+pages/Editor/EditorPage.tsx:186:      /* folders are optional */
+pages/Editor/EditorPage.tsx:187:    }
+pages/Editor/EditorPage.tsx:188:  }, [projectId]);
+pages/Editor/EditorPage.tsx:189:
+pages/Editor/EditorPage.tsx:190:  const loadLanguages = useCallback(async () => {
+pages/Editor/EditorPage.tsx:191:    try {
+pages/Editor/EditorPage.tsx:192:      const response = await languageService.getAll();
+pages/Editor/EditorPage.tsx:193:      setLanguages(response.data);
+pages/Editor/EditorPage.tsx:194:    } catch {
+pages/Editor/EditorPage.tsx:195:      /* languages optional */
+pages/Editor/EditorPage.tsx:196:    }
+pages/Editor/EditorPage.tsx:197:  }, []);
+pages/Editor/EditorPage.tsx:198:
+pages/Editor/EditorPage.tsx:199:  useEffect(() => {
+pages/Editor/EditorPage.tsx:200:    void loadProject();
+pages/Editor/EditorPage.tsx:201:    void loadFiles();
+pages/Editor/EditorPage.tsx:202:    void loadFolders();
+pages/Editor/EditorPage.tsx:203:    void loadLanguages();
+pages/Editor/EditorPage.tsx:204:  }, [loadProject, loadFiles, loadFolders, loadLanguages]);
+pages/Editor/EditorPage.tsx:205:
+pages/Editor/EditorPage.tsx:206:  const selectedLanguage = activeFile?.language ?? languages[0]?.slug ?? 'cpp';
+pages/Editor/EditorPage.tsx:207:
+pages/Editor/EditorPage.tsx:208:  /** C/C++/Python programs that read input run live: the sandbox keeps running
+pages/Editor/EditorPage.tsx:209:   *  and each answer is delivered one line at a time, so menu loops work. */
+pages/Editor/EditorPage.tsx:210:  const interactiveEligible = useMemo(
+pages/Editor/EditorPage.tsx:211:    () =>
+pages/Editor/EditorPage.tsx:212:      (activeFile?.language === 'c' ||
+pages/Editor/EditorPage.tsx:213:        activeFile?.language === 'cpp' ||
+pages/Editor/EditorPage.tsx:214:        activeFile?.language === 'python') &&
+pages/Editor/EditorPage.tsx:215:      codeNeedsInput(activeFile?.content ?? '', activeFile?.language),
+pages/Editor/EditorPage.tsx:216:    [activeFile?.content, activeFile?.language],
+pages/Editor/EditorPage.tsx:217:  );
+pages/Editor/EditorPage.tsx:218:
+pages/Editor/EditorPage.tsx:219:  useEffect(() => {
+pages/Editor/EditorPage.tsx:220:    interactiveEligibleRef.current = interactiveEligible;
+pages/Editor/EditorPage.tsx:221:  }, [interactiveEligible]);
+pages/Editor/EditorPage.tsx:222:
+pages/Editor/EditorPage.tsx:223:  useEffect(() => {
+pages/Editor/EditorPage.tsx:224:    inputLinesRef.current = inputLines;
+pages/Editor/EditorPage.tsx:225:  }, [inputLines]);
+pages/Editor/EditorPage.tsx:226:
+pages/Editor/EditorPage.tsx:227:  useEffect(() => {
+pages/Editor/EditorPage.tsx:228:    const onKey = (e: KeyboardEvent) => {
+pages/Editor/EditorPage.tsx:229:      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+pages/Editor/EditorPage.tsx:230:        e.preventDefault();
+pages/Editor/EditorPage.tsx:231:        if (!isSaving) void handleSave();
+pages/Editor/EditorPage.tsx:232:      }
+pages/Editor/EditorPage.tsx:233:      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+pages/Editor/EditorPage.tsx:234:        e.preventDefault();
+pages/Editor/EditorPage.tsx:235:        if (!isRunning && activeFile) void handleRun(false);
+pages/Editor/EditorPage.tsx:236:      }
+pages/Editor/EditorPage.tsx:237:      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+pages/Editor/EditorPage.tsx:238:        e.preventDefault();
+pages/Editor/EditorPage.tsx:239:        panel.toggle();
+pages/Editor/EditorPage.tsx:240:      }
+pages/Editor/EditorPage.tsx:241:      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+pages/Editor/EditorPage.tsx:242:        e.preventDefault();
+pages/Editor/EditorPage.tsx:243:        sidebar.toggle();
+pages/Editor/EditorPage.tsx:244:      }
+pages/Editor/EditorPage.tsx:245:    };
+pages/Editor/EditorPage.tsx:246:    window.addEventListener('keydown', onKey);
+pages/Editor/EditorPage.tsx:247:    return () => window.removeEventListener('keydown', onKey);
+pages/Editor/EditorPage.tsx:248:    // eslint-disable-next-line react-hooks/exhaustive-deps
+pages/Editor/EditorPage.tsx:249:  }, [activeFile, selectedLanguage, stdin, project, isRunning, isSaving, panel.toggle, sidebar.toggle]);
+pages/Editor/EditorPage.tsx:250:
+pages/Editor/EditorPage.tsx:251:  useEffect(() => {
+pages/Editor/EditorPage.tsx:252:    if (!prefs.autoSave || !activeFile || !dirty) return;
+pages/Editor/EditorPage.tsx:253:    const timer = window.setTimeout(() => void handleSave(), 1500);
+pages/Editor/EditorPage.tsx:254:    return () => window.clearTimeout(timer);
+pages/Editor/EditorPage.tsx:255:    // eslint-disable-next-line react-hooks/exhaustive-deps
+pages/Editor/EditorPage.tsx:256:  }, [activeFile?.content, activeFile?.language, prefs.autoSave, dirty]);
+pages/Editor/EditorPage.tsx:257:
+pages/Editor/EditorPage.tsx:258:  /** Persist the active file. Returns false on failure so callers can stop a
+pages/Editor/EditorPage.tsx:259:   *  tab switch / close — otherwise unsaved edits would silently be dropped. */
+pages/Editor/EditorPage.tsx:260:  const handleSave = async (): Promise<boolean> => {
+pages/Editor/EditorPage.tsx:261:    if (!activeFile || !dirty) return true;
+pages/Editor/EditorPage.tsx:262:    setIsSaving(true);
+pages/Editor/EditorPage.tsx:263:    try {
+pages/Editor/EditorPage.tsx:264:      const response = await fileService.update(activeFile.id, {
+pages/Editor/EditorPage.tsx:265:        content: activeFile.content,
+pages/Editor/EditorPage.tsx:266:        language: activeFile.language,
+pages/Editor/EditorPage.tsx:267:      });
+pages/Editor/EditorPage.tsx:268:      setActiveFile({ ...activeFile, content: response.data.content, language: response.data.language, updated_at: response.data.updated_at });
+pages/Editor/EditorPage.tsx:269:      setFiles((fs) => fs.map((f) => (f.id === activeFile.id ? { ...f, content: response.data.content, language: response.data.language, updated_at: response.data.updated_at } : f)));
+pages/Editor/EditorPage.tsx:270:      setSavedContent(response.data.content);
+pages/Editor/EditorPage.tsx:271:      setSavedLanguage(response.data.language);
+pages/Editor/EditorPage.tsx:272:      return true;
+pages/Editor/EditorPage.tsx:273:    } catch (err) {
+pages/Editor/EditorPage.tsx:274:      console.error('Save failed', err);
+pages/Editor/EditorPage.tsx:275:      toast.error(t('toast.save_failed'), t('toast.check_connection'));
+pages/Editor/EditorPage.tsx:276:      return false;
+pages/Editor/EditorPage.tsx:277:    } finally {
+pages/Editor/EditorPage.tsx:278:      setIsSaving(false);
+pages/Editor/EditorPage.tsx:279:    }
+pages/Editor/EditorPage.tsx:280:  };
+pages/Editor/EditorPage.tsx:281:
+pages/Editor/EditorPage.tsx:282:  /**
+pages/Editor/EditorPage.tsx:283:   * Sync committed console lines into the stdin buffer. The run is started by
+pages/Editor/EditorPage.tsx:284:   * the console itself (via onAllLinesCommitted) once the committed lines
+pages/Editor/EditorPage.tsx:285:   * cover every input the program asks for — nothing runs early here.
+pages/Editor/EditorPage.tsx:286:   */
+pages/Editor/EditorPage.tsx:287:  const handleInputLinesChange = useCallback((lines: string[]) => {
+pages/Editor/EditorPage.tsx:288:    inputLinesRef.current = lines;
+pages/Editor/EditorPage.tsx:289:    setInputLines(lines);
+pages/Editor/EditorPage.tsx:290:    setStdin(lines.join('\n'));
+pages/Editor/EditorPage.tsx:291:  }, []);
+pages/Editor/EditorPage.tsx:292:
+pages/Editor/EditorPage.tsx:293:  /** End an interactive session and surface the final record. Called by the
+pages/Editor/EditorPage.tsx:294:   *  poll loop when the sandbox exits on its own (program finished). Ignored
+pages/Editor/EditorPage.tsx:295:   *  if a newer session/abort bumped the token (stale continuation). */
+pages/Editor/EditorPage.tsx:296:  const finishLive = (id: number, exec: Execution, token: number) => {
+pages/Editor/EditorPage.tsx:297:    if (id !== liveSessionIdRef.current || token !== sessionTokenRef.current) return;
+pages/Editor/EditorPage.tsx:298:    if (pollTimerRef.current) {
+pages/Editor/EditorPage.tsx:299:      window.clearInterval(pollTimerRef.current);
+pages/Editor/EditorPage.tsx:300:      pollTimerRef.current = null;
+pages/Editor/EditorPage.tsx:301:    }
+pages/Editor/EditorPage.tsx:302:    const finished = {
+pages/Editor/EditorPage.tsx:303:      ...exec,
+pages/Editor/EditorPage.tsx:304:      interactive: true,
+pages/Editor/EditorPage.tsx:305:      stdin:
+pages/Editor/EditorPage.tsx:306:        inputLinesRef.current.length > 0 ? inputLinesRef.current.join('\n') : null,
+pages/Editor/EditorPage.tsx:307:      // Runtime failures in the PTY session are merged into the stream, not a
+pages/Editor/EditorPage.tsx:308:      // separate stderr file — surface the raw stream so the Errors tab/status
+pages/Editor/EditorPage.tsx:309:      // still explain what crashed. (Compile errors already carry stderr.)
+pages/Editor/EditorPage.tsx:310:      stderr:
+pages/Editor/EditorPage.tsx:311:        exec.stderr ||
+pages/Editor/EditorPage.tsx:312:        (['compile_error', 'runtime_error', 'timeout', 'memory_limit', 'system_error', 'failed'].includes(exec.status)
+pages/Editor/EditorPage.tsx:313:          ? (exec.stdout ?? '')
+pages/Editor/EditorPage.tsx:314:          : ''),
+pages/Editor/EditorPage.tsx:315:    };
+pages/Editor/EditorPage.tsx:316:    // The sandbox is gone but the terminal canvas stays mounted — the finished
+pages/Editor/EditorPage.tsx:317:    // stream remains visible as ONE continuous session (like a real terminal).
+pages/Editor/EditorPage.tsx:318:    liveActiveRef.current = false;
+pages/Editor/EditorPage.tsx:319:    liveSessionIdRef.current = null;
+pages/Editor/EditorPage.tsx:320:    setLiveSessionId(id);
+pages/Editor/EditorPage.tsx:321:    setLiveFinished(true);
+pages/Editor/EditorPage.tsx:322:    setLiveOutputB64(exec.output_b64 ?? liveOutputB64Ref.current);
+pages/Editor/EditorPage.tsx:323:    liveOutputB64Ref.current = exec.output_b64 ?? liveOutputB64Ref.current;
+pages/Editor/EditorPage.tsx:324:    setLiveTruncated(exec.truncated ?? false);
+pages/Editor/EditorPage.tsx:325:    setExecution(finished);
+pages/Editor/EditorPage.tsx:326:    isRunningRef.current = false;
+pages/Editor/EditorPage.tsx:327:    setIsRunning(false);
+pages/Editor/EditorPage.tsx:328:    setSuppress401Reload(false);
+pages/Editor/EditorPage.tsx:329:  };
+pages/Editor/EditorPage.tsx:330:
+pages/Editor/EditorPage.tsx:331:  /** Begin a live interactive session: show live output and poll the sandbox
+pages/Editor/EditorPage.tsx:332:   *  until the program exits on its own. */
+pages/Editor/EditorPage.tsx:333:  const beginLive = (exec: Execution) => {
+pages/Editor/EditorPage.tsx:334:    const token = ++sessionTokenRef.current;
+pages/Editor/EditorPage.tsx:335:    liveSessionIdRef.current = exec.id;
+pages/Editor/EditorPage.tsx:336:    liveActiveRef.current = true;
+pages/Editor/EditorPage.tsx:337:    setSuppress401Reload(true);
+pages/Editor/EditorPage.tsx:338:    setLiveSessionId(exec.id);
+pages/Editor/EditorPage.tsx:339:    setExecution(null);
+pages/Editor/EditorPage.tsx:340:    setLiveOutputB64(exec.output_b64 ?? '');
+pages/Editor/EditorPage.tsx:341:    liveOutputB64Ref.current = exec.output_b64 ?? '';
+pages/Editor/EditorPage.tsx:342:    setLiveTruncated(exec.truncated ?? false);
+pages/Editor/EditorPage.tsx:343:    const id = exec.id;
+pages/Editor/EditorPage.tsx:344:    pollTimerRef.current = window.setInterval(() => {
+pages/Editor/EditorPage.tsx:345:      void pollLoop(id, token);
+pages/Editor/EditorPage.tsx:346:    }, 500);
+pages/Editor/EditorPage.tsx:347:  };
+pages/Editor/EditorPage.tsx:348:
+pages/Editor/EditorPage.tsx:349:  /** Poll the running session: refresh live output, finalize when it exits. */
+pages/Editor/EditorPage.tsx:350:  const pollLoop = async (id: number, token: number) => {
+pages/Editor/EditorPage.tsx:351:    if (!liveActiveRef.current || token !== sessionTokenRef.current) return;
+pages/Editor/EditorPage.tsx:352:    try {
+pages/Editor/EditorPage.tsx:353:      const res = await executionService.pollInteractive(id);
+pages/Editor/EditorPage.tsx:354:      if (!liveActiveRef.current || token !== sessionTokenRef.current) return;
+pages/Editor/EditorPage.tsx:355:      const exec = res.data;
+pages/Editor/EditorPage.tsx:356:      const stream = exec.output_b64 ?? '';
+pages/Editor/EditorPage.tsx:357:      if (stream !== liveOutputB64Ref.current) {
+pages/Editor/EditorPage.tsx:358:        liveOutputB64Ref.current = stream;
+pages/Editor/EditorPage.tsx:359:      }
+pages/Editor/EditorPage.tsx:360:      setLiveOutputB64(stream);
+pages/Editor/EditorPage.tsx:361:      setLiveTruncated(exec.truncated ?? false);
+pages/Editor/EditorPage.tsx:362:      if (exec.interactive_finished) finishLive(id, exec, token);
+pages/Editor/EditorPage.tsx:363:    } catch {
+pages/Editor/EditorPage.tsx:364:      /* transient network error — keep polling; the sandbox session cap ends it */
+pages/Editor/EditorPage.tsx:365:    }
+pages/Editor/EditorPage.tsx:366:  };
+pages/Editor/EditorPage.tsx:367:
+pages/Editor/EditorPage.tsx:368:  /** Forward raw terminal bytes (keystrokes, base64) to the running program. */
+pages/Editor/EditorPage.tsx:369:  const handleRawInput = useCallback(async (chunk: string) => {
+pages/Editor/EditorPage.tsx:370:    const id = liveSessionIdRef.current;
+pages/Editor/EditorPage.tsx:371:    if (id == null || !liveActiveRef.current) return;
+pages/Editor/EditorPage.tsx:372:    const token = sessionTokenRef.current;
+pages/Editor/EditorPage.tsx:373:    try {
+pages/Editor/EditorPage.tsx:374:      const res = await executionService.sendInteractiveInput(id, { chunk });
+pages/Editor/EditorPage.tsx:375:      if (!liveActiveRef.current || token !== sessionTokenRef.current) return;
+pages/Editor/EditorPage.tsx:376:      const exec = res.data;
+pages/Editor/EditorPage.tsx:377:      setLiveOutputB64(exec.output_b64 ?? '');
+pages/Editor/EditorPage.tsx:378:      liveOutputB64Ref.current = exec.output_b64 ?? '';
+pages/Editor/EditorPage.tsx:379:      setLiveTruncated(exec.truncated ?? false);
+pages/Editor/EditorPage.tsx:380:      if (exec.interactive_finished) finishLive(id, exec, token);
+pages/Editor/EditorPage.tsx:381:    } catch {
+pages/Editor/EditorPage.tsx:382:      /* ignore — polling continues the session */
+pages/Editor/EditorPage.tsx:383:    }
+pages/Editor/EditorPage.tsx:384:  }, []);
+pages/Editor/EditorPage.tsx:385:
+pages/Editor/EditorPage.tsx:386:  /** Resize the sandbox PTY to match the terminal canvas. */
+pages/Editor/EditorPage.tsx:387:  const handleLiveResize = useCallback(async (rows: number, cols: number) => {
+pages/Editor/EditorPage.tsx:388:    const id = liveSessionIdRef.current;
+pages/Editor/EditorPage.tsx:389:    if (id == null || !liveActiveRef.current || !rows || !cols) return;
+pages/Editor/EditorPage.tsx:390:    const token = sessionTokenRef.current;
+pages/Editor/EditorPage.tsx:391:    try {
+pages/Editor/EditorPage.tsx:392:      const res = await executionService.sendInteractiveInput(id, { rows, cols });
+pages/Editor/EditorPage.tsx:393:      if (!liveActiveRef.current || token !== sessionTokenRef.current) return;
+pages/Editor/EditorPage.tsx:394:      const exec = res.data;
+pages/Editor/EditorPage.tsx:395:      setLiveOutputB64(exec.output_b64 ?? '');
+pages/Editor/EditorPage.tsx:396:      liveOutputB64Ref.current = exec.output_b64 ?? '';
+pages/Editor/EditorPage.tsx:397:      if (exec.interactive_finished) finishLive(id, exec, token);
+pages/Editor/EditorPage.tsx:398:    } catch {
+pages/Editor/EditorPage.tsx:399:      /* ignore — polling continues the session */
+pages/Editor/EditorPage.tsx:400:    }
+pages/Editor/EditorPage.tsx:401:  }, []);
+pages/Editor/EditorPage.tsx:402:
+pages/Editor/EditorPage.tsx:403:  /** Stop the live session. With finalize, the final record is surfaced from
+pages/Editor/EditorPage.tsx:404:   *  the sandbox's close response; abort mode (file switch / clear) only
+pages/Editor/EditorPage.tsx:405:   *  kills the sandbox and leaves the terminal to the caller. */
+pages/Editor/EditorPage.tsx:406:  const stopLiveSession = useCallback(
+pages/Editor/EditorPage.tsx:407:    (finalize = true) => {
+pages/Editor/EditorPage.tsx:408:      const token = ++sessionTokenRef.current;
+pages/Editor/EditorPage.tsx:409:      liveActiveRef.current = false;
+pages/Editor/EditorPage.tsx:410:      setSuppress401Reload(false);
+pages/Editor/EditorPage.tsx:411:      if (pollTimerRef.current) {
+pages/Editor/EditorPage.tsx:412:        window.clearInterval(pollTimerRef.current);
+pages/Editor/EditorPage.tsx:413:        pollTimerRef.current = null;
+pages/Editor/EditorPage.tsx:414:      }
+pages/Editor/EditorPage.tsx:415:      const id = liveSessionIdRef.current;
+pages/Editor/EditorPage.tsx:416:      liveSessionIdRef.current = null;
+pages/Editor/EditorPage.tsx:417:      setLiveSessionId(null);
+pages/Editor/EditorPage.tsx:418:      setLiveOutputB64('');
+pages/Editor/EditorPage.tsx:419:      liveOutputB64Ref.current = '';
+pages/Editor/EditorPage.tsx:420:      setLiveTruncated(false);
+pages/Editor/EditorPage.tsx:421:      if (id == null) {
+pages/Editor/EditorPage.tsx:422:        if (isRunningRef.current) {
+pages/Editor/EditorPage.tsx:423:          isRunningRef.current = false;
+pages/Editor/EditorPage.tsx:424:          setIsRunning(false);
+pages/Editor/EditorPage.tsx:425:        }
+pages/Editor/EditorPage.tsx:426:        return;
+pages/Editor/EditorPage.tsx:427:      }
+pages/Editor/EditorPage.tsx:428:      if (!finalize) {
+pages/Editor/EditorPage.tsx:429:        void executionService
+pages/Editor/EditorPage.tsx:430:          .sendInteractiveInput(id, { close: true })
+pages/Editor/EditorPage.tsx:431:          .catch(() => undefined);
+pages/Editor/EditorPage.tsx:432:        if (isRunningRef.current) {
+pages/Editor/EditorPage.tsx:433:          isRunningRef.current = false;
+pages/Editor/EditorPage.tsx:434:          setIsRunning(false);
+pages/Editor/EditorPage.tsx:435:        }
+pages/Editor/EditorPage.tsx:436:        return;
+pages/Editor/EditorPage.tsx:437:      }
+pages/Editor/EditorPage.tsx:438:      void (async () => {
+pages/Editor/EditorPage.tsx:439:        try {
+pages/Editor/EditorPage.tsx:440:          const res = await executionService.sendInteractiveInput(id, { close: true });
+pages/Editor/EditorPage.tsx:441:          if (token !== sessionTokenRef.current || !isRunningRef.current) return;
+pages/Editor/EditorPage.tsx:442:          const exec = res.data;
+pages/Editor/EditorPage.tsx:443:          if (exec) {
+pages/Editor/EditorPage.tsx:444:            setExecution({
+pages/Editor/EditorPage.tsx:445:              ...exec,
+pages/Editor/EditorPage.tsx:446:              interactive: true,
+pages/Editor/EditorPage.tsx:447:              stdin:
+pages/Editor/EditorPage.tsx:448:                inputLinesRef.current.length > 0
+pages/Editor/EditorPage.tsx:449:                  ? inputLinesRef.current.join('\n')
+pages/Editor/EditorPage.tsx:450:                  : null,
+pages/Editor/EditorPage.tsx:451:            });
+pages/Editor/EditorPage.tsx:452:          }
+pages/Editor/EditorPage.tsx:453:          isRunningRef.current = false;
+pages/Editor/EditorPage.tsx:454:          setIsRunning(false);
+pages/Editor/EditorPage.tsx:455:        } catch {
+pages/Editor/EditorPage.tsx:456:          if (token !== sessionTokenRef.current || !isRunningRef.current) return;
+pages/Editor/EditorPage.tsx:457:          setExecution({
+pages/Editor/EditorPage.tsx:458:            id: id,
+pages/Editor/EditorPage.tsx:459:            user_id: project?.user_id ?? 0,
+pages/Editor/EditorPage.tsx:460:            project_id: project?.id ?? 0,
+pages/Editor/EditorPage.tsx:461:            file_id: activeFile?.id ?? 0,
+pages/Editor/EditorPage.tsx:462:            language_id: 0,
+pages/Editor/EditorPage.tsx:463:            status: 'system_error',
+pages/Editor/EditorPage.tsx:464:            source_code: '',
+pages/Editor/EditorPage.tsx:465:            stdin:
+pages/Editor/EditorPage.tsx:466:              inputLinesRef.current.length > 0
+pages/Editor/EditorPage.tsx:467:                ? inputLinesRef.current.join('\n')
+pages/Editor/EditorPage.tsx:468:                : null,
+pages/Editor/EditorPage.tsx:469:            stdout: '',
+pages/Editor/EditorPage.tsx:470:            stderr: t('toast.couldnt_run'),
+pages/Editor/EditorPage.tsx:471:            exit_code: null,
+pages/Editor/EditorPage.tsx:472:            execution_time: null,
+pages/Editor/EditorPage.tsx:473:            memory_usage: null,
+pages/Editor/EditorPage.tsx:474:            created_at: new Date().toISOString(),
+pages/Editor/EditorPage.tsx:475:            updated_at: new Date().toISOString(),
+pages/Editor/EditorPage.tsx:476:          });
+pages/Editor/EditorPage.tsx:477:          isRunningRef.current = false;
+pages/Editor/EditorPage.tsx:478:          setIsRunning(false);
+pages/Editor/EditorPage.tsx:479:        }
+pages/Editor/EditorPage.tsx:480:      })();
+pages/Editor/EditorPage.tsx:481:    },
+pages/Editor/EditorPage.tsx:482:    [project?.id, project?.user_id, activeFile?.id, t],
+pages/Editor/EditorPage.tsx:483:  );
+pages/Editor/EditorPage.tsx:484:
+pages/Editor/EditorPage.tsx:485:  /** Stop the sandbox when the editor unmounts (never leave a container running). */
+pages/Editor/EditorPage.tsx:486:  useEffect(() => {
+pages/Editor/EditorPage.tsx:487:    return () => {
+pages/Editor/EditorPage.tsx:488:      const id = liveSessionIdRef.current;
+pages/Editor/EditorPage.tsx:489:      if (liveActiveRef.current && id != null) {
+pages/Editor/EditorPage.tsx:490:        void executionService.sendInteractiveInput(id, { close: true }).catch(() => undefined);
+pages/Editor/EditorPage.tsx:491:      }
+pages/Editor/EditorPage.tsx:492:      setSuppress401Reload(false);
+pages/Editor/EditorPage.tsx:493:      if (pollTimerRef.current) {
+pages/Editor/EditorPage.tsx:494:        window.clearInterval(pollTimerRef.current);
+pages/Editor/EditorPage.tsx:495:        pollTimerRef.current = null;
+pages/Editor/EditorPage.tsx:496:      }
+pages/Editor/EditorPage.tsx:497:    };
+pages/Editor/EditorPage.tsx:498:    // eslint-disable-next-line react-hooks/exhaustive-deps
+pages/Editor/EditorPage.tsx:499:  }, []);
+pages/Editor/EditorPage.tsx:500:
+pages/Editor/EditorPage.tsx:501:  /**
+pages/Editor/EditorPage.tsx:502:   * VS Code-style auto-run: fired by the console when the committed input
+pages/Editor/EditorPage.tsx:503:   * covers every detected prompt (the last Enter acts like the Run button).
+pages/Editor/EditorPage.tsx:504:   * Guarded against a run already in progress so Enter cannot double-fire.
+pages/Editor/EditorPage.tsx:505:   * If the previous run starved of input, this is a continuation — the
+pages/Editor/EditorPage.tsx:506:   * committed lines stay in the console and are all re-sent as stdin.
+pages/Editor/EditorPage.tsx:507:   */
+pages/Editor/EditorPage.tsx:508:  const handleAllLinesCommitted = useCallback(() => {
+pages/Editor/EditorPage.tsx:509:    window.setTimeout(() => {
+pages/Editor/EditorPage.tsx:510:      if (isRunningRef.current) return;
+pages/Editor/EditorPage.tsx:511:      // Interactive C/C++/Python programs take answers live (started via Run) —
+pages/Editor/EditorPage.tsx:512:      // the last typed line must NOT fire a batch run.
+pages/Editor/EditorPage.tsx:513:      if (interactiveEligibleRef.current) return;
+pages/Editor/EditorPage.tsx:514:      const continueSession = awaitingInputRef.current;
+pages/Editor/EditorPage.tsx:515:      awaitingInputRef.current = false;
+pages/Editor/EditorPage.tsx:516:      void handleRunRef.current(continueSession);
+pages/Editor/EditorPage.tsx:517:    }, 0);
+pages/Editor/EditorPage.tsx:518:  }, []);
+pages/Editor/EditorPage.tsx:519:
+pages/Editor/EditorPage.tsx:520:  const handleRun = async (continueSession = false) => {
+pages/Editor/EditorPage.tsx:521:    if (!activeFile || !project) return;
+pages/Editor/EditorPage.tsx:522:    // Synchronous guard: Enter/Run can fire again while await handleSave()
+pages/Editor/EditorPage.tsx:523:    // yields, so the isRunningRef check alone is not enough.
+pages/Editor/EditorPage.tsx:524:    if (isRunningRef.current) return;
+pages/Editor/EditorPage.tsx:525:    isRunningRef.current = true;
+pages/Editor/EditorPage.tsx:526:    // Any run invalidates in-flight live-session finalizers (e.g. a Stop
+pages/Editor/EditorPage.tsx:527:    // confirmation arriving after the user already reran or switched file).
+pages/Editor/EditorPage.tsx:528:    sessionTokenRef.current += 1;
+pages/Editor/EditorPage.tsx:529:    if (
+pages/Editor/EditorPage.tsx:530:      window.matchMedia('(max-width: 1023px)').matches &&
+pages/Editor/EditorPage.tsx:531:      (mobileTab === 'files' || mobileTab === 'more')
+pages/Editor/EditorPage.tsx:532:    ) {
+pages/Editor/EditorPage.tsx:533:      setMobileTab('code');
+pages/Editor/EditorPage.tsx:534:    }
+pages/Editor/EditorPage.tsx:535:
+pages/Editor/EditorPage.tsx:536:    // Interactive C/C++/Python with input reads: keep the sandbox running and
+pages/Editor/EditorPage.tsx:537:    // send answers one line at a time, so menu loops and multi-step prompts work.
+pages/Editor/EditorPage.tsx:538:    if (interactiveEligible && !continueSession) {
+pages/Editor/EditorPage.tsx:539:      try {
+pages/Editor/EditorPage.tsx:540:        if (dirty) await handleSave();
+pages/Editor/EditorPage.tsx:541:        setIsRunning(true);
+pages/Editor/EditorPage.tsx:542:        setExecution(null);
+pages/Editor/EditorPage.tsx:543:        setLiveOutputB64('');
+pages/Editor/EditorPage.tsx:544:        const created = await executionService.execute({
+pages/Editor/EditorPage.tsx:545:          language: selectedLanguage,
+pages/Editor/EditorPage.tsx:546:          project_id: project.id,
+pages/Editor/EditorPage.tsx:547:          file_id: activeFile.id,
+pages/Editor/EditorPage.tsx:548:          code: activeFile.content,
+pages/Editor/EditorPage.tsx:549:          stdin: '',
+pages/Editor/EditorPage.tsx:550:          interactive: true,
+pages/Editor/EditorPage.tsx:551:        });
+pages/Editor/EditorPage.tsx:552:        const started = await executionService.startInteractive(created.data.id);
+pages/Editor/EditorPage.tsx:553:        const exec = started.data;
+pages/Editor/EditorPage.tsx:554:        if (!exec) throw new Error('Missing execution data');
+pages/Editor/EditorPage.tsx:555:        if (exec.interactive_finished) {
+pages/Editor/EditorPage.tsx:556:          // Finished instantly (e.g. a compile/syntax error) — surface the
+pages/Editor/EditorPage.tsx:557:          // result and release the running guard (we never entered a session).
+pages/Editor/EditorPage.tsx:558:          isRunningRef.current = false;
+pages/Editor/EditorPage.tsx:559:          setIsRunning(false);
+pages/Editor/EditorPage.tsx:560:          setSuppress401Reload(false);
+pages/Editor/EditorPage.tsx:561:          setExecution(exec);
+pages/Editor/EditorPage.tsx:562:          return;
+pages/Editor/EditorPage.tsx:563:        }
+pages/Editor/EditorPage.tsx:564:        beginLive(exec);
+pages/Editor/EditorPage.tsx:565:      } catch (err) {
+pages/Editor/EditorPage.tsx:566:        console.error('Interactive run failed, falling back to batch', err);
+pages/Editor/EditorPage.tsx:567:        // Release the guard, then degrade to the normal batch path.
+pages/Editor/EditorPage.tsx:568:        isRunningRef.current = false;
+pages/Editor/EditorPage.tsx:569:        setIsRunning(false);
+pages/Editor/EditorPage.tsx:570:        await handleRunRef.current(false);
+pages/Editor/EditorPage.tsx:571:      }
+pages/Editor/EditorPage.tsx:572:      return;
+pages/Editor/EditorPage.tsx:573:    }
+pages/Editor/EditorPage.tsx:574:
+pages/Editor/EditorPage.tsx:575:    // Flush any uncommitted console input so the last typed line is included.
+pages/Editor/EditorPage.tsx:576:    const finalStdin = consoleRef.current?.flushPending() ?? stdin;
+pages/Editor/EditorPage.tsx:577:    if (finalStdin !== stdin) setStdin(finalStdin);
+pages/Editor/EditorPage.tsx:578:    if (!continueSession) {
+pages/Editor/EditorPage.tsx:579:      // Fresh session (Run button / auto-run): clear the console so the next
+pages/Editor/EditorPage.tsx:580:      // run asks for new input from the first prompt, like a new terminal.
+pages/Editor/EditorPage.tsx:581:      // Continuations of an input-starved session KEEP the lines — the program
+pages/Editor/EditorPage.tsx:582:      // restarts, and every answer so far is re-sent as stdin.
+pages/Editor/EditorPage.tsx:583:      setInputLines([]);
+pages/Editor/EditorPage.tsx:584:      setStdin('');
+pages/Editor/EditorPage.tsx:585:    }
+pages/Editor/EditorPage.tsx:586:    if (dirty) await handleSave();
+pages/Editor/EditorPage.tsx:587:    // Execution needs the backend: never fire a doomed request while offline.
+pages/Editor/EditorPage.tsx:588:    // `navigator.onLine` is the same truth source OfflineBanner / useOnline
+pages/Editor/EditorPage.tsx:589:    // rely on — this gate guarantees an honest terminal message instead of a
+pages/Editor/EditorPage.tsx:590:    // raw Chrome "Network Error" (and never a fake success).
+pages/Editor/EditorPage.tsx:591:    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+pages/Editor/EditorPage.tsx:592:      isRunningRef.current = false;
+pages/Editor/EditorPage.tsx:593:      const offlineMsg = t('toast.offline_cant_run');
+pages/Editor/EditorPage.tsx:594:      setExecution({
+pages/Editor/EditorPage.tsx:595:        id: 0,
+pages/Editor/EditorPage.tsx:596:        user_id: project?.user_id ?? 0,
+pages/Editor/EditorPage.tsx:597:        project_id: project.id,
+pages/Editor/EditorPage.tsx:598:        file_id: activeFile.id,
+pages/Editor/EditorPage.tsx:599:        language_id: 0,
+pages/Editor/EditorPage.tsx:600:        status: 'system_error',
+pages/Editor/EditorPage.tsx:601:        source_code: '',
+pages/Editor/EditorPage.tsx:602:        stdin: null,
+pages/Editor/EditorPage.tsx:603:        stdout: '',
+pages/Editor/EditorPage.tsx:604:        stderr: offlineMsg,
+pages/Editor/EditorPage.tsx:605:        exit_code: null,
+pages/Editor/EditorPage.tsx:606:        execution_time: null,
+pages/Editor/EditorPage.tsx:607:        memory_usage: null,
+pages/Editor/EditorPage.tsx:608:        created_at: new Date().toISOString(),
+pages/Editor/EditorPage.tsx:609:        updated_at: new Date().toISOString(),
+pages/Editor/EditorPage.tsx:610:      });
+pages/Editor/EditorPage.tsx:611:      setIsRunning(false);
+pages/Editor/EditorPage.tsx:612:      toast.error(offlineMsg);
+pages/Editor/EditorPage.tsx:613:      return;
+pages/Editor/EditorPage.tsx:614:    }
+pages/Editor/EditorPage.tsx:615:    setIsRunning(true);
+pages/Editor/EditorPage.tsx:616:    setExecution(null);
+pages/Editor/EditorPage.tsx:617:    try {
+pages/Editor/EditorPage.tsx:618:      setSuppress401Reload(true);
+pages/Editor/EditorPage.tsx:619:      const response = await executionService.execute({
+pages/Editor/EditorPage.tsx:620:        language: selectedLanguage,
+pages/Editor/EditorPage.tsx:621:        project_id: project.id,
+pages/Editor/EditorPage.tsx:622:        file_id: activeFile.id,
+pages/Editor/EditorPage.tsx:623:        code: activeFile.content,
+pages/Editor/EditorPage.tsx:624:        stdin: finalStdin,
+pages/Editor/EditorPage.tsx:625:      });
+pages/Editor/EditorPage.tsx:626:      const result = await executionService.pollStatus(response.data.id);
+pages/Editor/EditorPage.tsx:627:      setExecution(result);
+pages/Editor/EditorPage.tsx:628:      // Input-starved runs are not failures: the terminal offers a fresh
+pages/Editor/EditorPage.tsx:629:      // prompt and committing another line re-runs automatically (below).
+pages/Editor/EditorPage.tsx:630:      if (result.status === 'runtime_error' && isInputStarved(result.stderr)) {
+pages/Editor/EditorPage.tsx:631:        awaitingInputRef.current = true;
+pages/Editor/EditorPage.tsx:632:      }
+pages/Editor/EditorPage.tsx:633:    } catch (err: unknown) {
+pages/Editor/EditorPage.tsx:634:      const data = (err as { response?: { data?: { data?: Execution } } })?.response?.data?.data;
+pages/Editor/EditorPage.tsx:635:      if (data) {
+pages/Editor/EditorPage.tsx:636:        setExecution(data);
+pages/Editor/EditorPage.tsx:637:      } else {
+pages/Editor/EditorPage.tsx:638:        // No execution record (network/queue failure) — surface it in the
+pages/Editor/EditorPage.tsx:639:        // terminal instead of a popup alert.
+pages/Editor/EditorPage.tsx:640:        const message =
+pages/Editor/EditorPage.tsx:641:          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+pages/Editor/EditorPage.tsx:642:          t('toast.couldnt_run');
+pages/Editor/EditorPage.tsx:643:        setExecution({
+pages/Editor/EditorPage.tsx:644:          id: 0,
+pages/Editor/EditorPage.tsx:645:          user_id: project?.user_id ?? 0,
+pages/Editor/EditorPage.tsx:646:          project_id: project?.id ?? 0,
+pages/Editor/EditorPage.tsx:647:          file_id: activeFile.id,
+pages/Editor/EditorPage.tsx:648:          language_id: 0,
+pages/Editor/EditorPage.tsx:649:          status: 'system_error',
+pages/Editor/EditorPage.tsx:650:          source_code: '',
+pages/Editor/EditorPage.tsx:651:          stdin: finalStdin || null,
+pages/Editor/EditorPage.tsx:652:          stdout: '',
+pages/Editor/EditorPage.tsx:653:          stderr: message,
+pages/Editor/EditorPage.tsx:654:          exit_code: null,
+pages/Editor/EditorPage.tsx:655:          execution_time: null,
+pages/Editor/EditorPage.tsx:656:          memory_usage: null,
+pages/Editor/EditorPage.tsx:657:          created_at: new Date().toISOString(),
+pages/Editor/EditorPage.tsx:658:          updated_at: new Date().toISOString(),
+pages/Editor/EditorPage.tsx:659:        });
+pages/Editor/EditorPage.tsx:660:      }
+pages/Editor/EditorPage.tsx:661:    } finally {
+pages/Editor/EditorPage.tsx:662:      isRunningRef.current = false;
+pages/Editor/EditorPage.tsx:663:      setIsRunning(false);
+pages/Editor/EditorPage.tsx:664:      setSuppress401Reload(false);
+pages/Editor/EditorPage.tsx:665:    }
+pages/Editor/EditorPage.tsx:666:  };
+pages/Editor/EditorPage.tsx:667:  handleRunRef.current = handleRun;
+pages/Editor/EditorPage.tsx:668:
+pages/Editor/EditorPage.tsx:669:  const handleCodeChange = (value: string) => {
+pages/Editor/EditorPage.tsx:670:    if (!activeFile) return;
+pages/Editor/EditorPage.tsx:671:    setActiveFile((f) => (f ? { ...f, content: value } : f));
+pages/Editor/EditorPage.tsx:672:  };
+pages/Editor/EditorPage.tsx:673:
+pages/Editor/EditorPage.tsx:674:  /** Jump the Monaco cursor to the error line and reveal it. */
+pages/Editor/EditorPage.tsx:675:  const handleGoToErrorLine = (line: number) => {
+pages/Editor/EditorPage.tsx:676:    if (mobileTab === 'output') setMobileTab('code');
+pages/Editor/EditorPage.tsx:677:    editorRef.current?.revealLine(line);
+pages/Editor/EditorPage.tsx:678:  };
+pages/Editor/EditorPage.tsx:679:
+pages/Editor/EditorPage.tsx:680:  /** Focus the console input row (also switches mobile tabs if needed). */
+pages/Editor/EditorPage.tsx:681:  const handleFocusConsole = () => {
+pages/Editor/EditorPage.tsx:682:    if (mobileTab === 'files' || mobileTab === 'more') setMobileTab('code');
+pages/Editor/EditorPage.tsx:683:    terminalPanelRef.current?.focusConsole();
+pages/Editor/EditorPage.tsx:684:  };
+pages/Editor/EditorPage.tsx:685:
+pages/Editor/EditorPage.tsx:686:  /** Wipe the terminal: past output, errors, and any typed input.
+pages/Editor/EditorPage.tsx:687:   *  A live run is still going — clearing wipes the on-screen transcript but
+pages/Editor/EditorPage.tsx:688:   *  must NOT kill the sandbox (like clearing a real terminal pane). */
+pages/Editor/EditorPage.tsx:689:  const handleClearTerminal = () => {
+pages/Editor/EditorPage.tsx:690:    if (liveSessionId !== null) {
+pages/Editor/EditorPage.tsx:691:      terminalPanelRef.current?.clearLive();
+pages/Editor/EditorPage.tsx:692:      return;
+pages/Editor/EditorPage.tsx:693:    }
+pages/Editor/EditorPage.tsx:694:    stopLiveSession(false);
+pages/Editor/EditorPage.tsx:695:    setExecution(null);
+pages/Editor/EditorPage.tsx:696:    setStdin('');
+pages/Editor/EditorPage.tsx:697:    setInputLines([]);
+pages/Editor/EditorPage.tsx:698:    awaitingInputRef.current = false;
+pages/Editor/EditorPage.tsx:699:  };
+pages/Editor/EditorPage.tsx:700:
+pages/Editor/EditorPage.tsx:701:  /** Program is waiting for input — make sure the console is visible. */
+pages/Editor/EditorPage.tsx:702:  const handleInputReady = useCallback(() => {
+pages/Editor/EditorPage.tsx:703:    // Live PTY run on mobile: surface the output tab that hosts the xterm
+pages/Editor/EditorPage.tsx:704:    // canvas (once per session). Never on desktop — that main is lg:hidden.
+pages/Editor/EditorPage.tsx:705:    if (liveActiveRef.current && !window.matchMedia('(min-width: 1024px)').matches) {
+pages/Editor/EditorPage.tsx:706:      setMobileTab('output');
+pages/Editor/EditorPage.tsx:707:      return;
+pages/Editor/EditorPage.tsx:708:    }
+pages/Editor/EditorPage.tsx:709:    // On mobile, jump out of Files/More so the console row is on screen.
+pages/Editor/EditorPage.tsx:710:    setMobileTab((t) => (t === 'files' || t === 'more' ? 'code' : t));
+pages/Editor/EditorPage.tsx:711:  }, []);
+pages/Editor/EditorPage.tsx:712:
+pages/Editor/EditorPage.tsx:713:  /** Apply a one-click fix suggestion to the active file content. */
+pages/Editor/EditorPage.tsx:714:  const handleApplyFix = (line: number, apply: (code: string) => string) => {
+pages/Editor/EditorPage.tsx:715:    if (!activeFile) return;
+pages/Editor/EditorPage.tsx:716:    const next = apply(activeFile.content);
+pages/Editor/EditorPage.tsx:717:    if (next === activeFile.content) return; // fix was a no-op
+pages/Editor/EditorPage.tsx:718:    setActiveFile((f) => (f ? { ...f, content: next } : f));
+pages/Editor/EditorPage.tsx:719:    if (mobileTab === 'output') setMobileTab('code');
+pages/Editor/EditorPage.tsx:720:    // Let state settle before revealing the edited line.
+pages/Editor/EditorPage.tsx:721:    window.setTimeout(() => editorRef.current?.revealLine(line), 50);
+pages/Editor/EditorPage.tsx:722:  };
+pages/Editor/EditorPage.tsx:723:
+pages/Editor/EditorPage.tsx:724:  const handleSelectFile = async (file: File) => {
+pages/Editor/EditorPage.tsx:725:    if (activeFile && activeFile.id !== file.id && dirty) {
+pages/Editor/EditorPage.tsx:726:      // Don't switch away if the save fails — the edits would be lost.
+pages/Editor/EditorPage.tsx:727:      const saved = await handleSave();
+pages/Editor/EditorPage.tsx:728:      if (!saved) return;
+pages/Editor/EditorPage.tsx:729:    }
+pages/Editor/EditorPage.tsx:730:    setOpenFileIds((ids) => (ids.includes(file.id) ? ids : [...ids, file.id]));
+pages/Editor/EditorPage.tsx:731:    setActiveFile(file);
+pages/Editor/EditorPage.tsx:732:    setSavedContent(file.content);
+pages/Editor/EditorPage.tsx:733:    setSavedLanguage(file.language);
+pages/Editor/EditorPage.tsx:734:    stopLiveSession(false);
+pages/Editor/EditorPage.tsx:735:    setExecution(null);
+pages/Editor/EditorPage.tsx:736:    // Fresh console session for the new file.
+pages/Editor/EditorPage.tsx:737:    setInputLines([]);
+pages/Editor/EditorPage.tsx:738:    setStdin('');
+pages/Editor/EditorPage.tsx:739:  };
+pages/Editor/EditorPage.tsx:740:
+pages/Editor/EditorPage.tsx:741:  /** Close an editor tab only — the file stays in the project (explorer). */
+pages/Editor/EditorPage.tsx:742:  const handleCloseTab = (file: File) => {
+pages/Editor/EditorPage.tsx:743:    void (async () => {
+pages/Editor/EditorPage.tsx:744:      // Flush unsaved edits for the closing file before it leaves the editor.
+pages/Editor/EditorPage.tsx:745:      if (file.id === activeFile?.id && dirty) {
+pages/Editor/EditorPage.tsx:746:        const saved = await handleSave();
+pages/Editor/EditorPage.tsx:747:        if (!saved) return;
+pages/Editor/EditorPage.tsx:748:      }
+pages/Editor/EditorPage.tsx:749:      const remaining = openFileIds.filter((id) => id !== file.id);
+pages/Editor/EditorPage.tsx:750:      setOpenFileIds(remaining);
+pages/Editor/EditorPage.tsx:751:      if (activeFile?.id === file.id) {
+pages/Editor/EditorPage.tsx:752:        const nextFile = files.find((f) => f.id === remaining[0]) ?? null;
+pages/Editor/EditorPage.tsx:753:        setActiveFile(nextFile);
+pages/Editor/EditorPage.tsx:754:        setSavedContent(nextFile ? nextFile.content : '');
+pages/Editor/EditorPage.tsx:755:        setSavedLanguage(nextFile ? nextFile.language : 'cpp');
+pages/Editor/EditorPage.tsx:756:        stopLiveSession(false);
+pages/Editor/EditorPage.tsx:757:        setExecution(null);
+pages/Editor/EditorPage.tsx:758:        setInputLines([]);
+pages/Editor/EditorPage.tsx:759:        setStdin('');
+pages/Editor/EditorPage.tsx:760:      }
+pages/Editor/EditorPage.tsx:761:    })();
+pages/Editor/EditorPage.tsx:762:  };
+pages/Editor/EditorPage.tsx:763:
+pages/Editor/EditorPage.tsx:764:  const handleLanguageChange = (slug: string) => {
+pages/Editor/EditorPage.tsx:765:    if (!activeFile || slug === activeFile.language) return;
+pages/Editor/EditorPage.tsx:766:    setActiveFile((f) => (f ? { ...f, language: slug } : f));
+pages/Editor/EditorPage.tsx:767:    setFiles((fs) => fs.map((f) => (f.id === activeFile.id ? { ...f, language: slug } : f)));
+pages/Editor/EditorPage.tsx:768:  };
+pages/Editor/EditorPage.tsx:769:
+pages/Editor/EditorPage.tsx:770:  const handleCreateFile = (filename: string, language: string, folderId: number | null = null, content?: string) => {
+pages/Editor/EditorPage.tsx:771:    void (async () => {
+pages/Editor/EditorPage.tsx:772:      try {
+pages/Editor/EditorPage.tsx:773:        if (activeFile && dirty) {
+pages/Editor/EditorPage.tsx:774:          const saved = await handleSave();
+pages/Editor/EditorPage.tsx:775:          if (!saved) return;
+pages/Editor/EditorPage.tsx:776:        }
+pages/Editor/EditorPage.tsx:777:        const response = await fileService.create(pId, {
+pages/Editor/EditorPage.tsx:778:          folder_id: folderId,
+pages/Editor/EditorPage.tsx:779:          filename,
+pages/Editor/EditorPage.tsx:780:          language,
+pages/Editor/EditorPage.tsx:781:          content: content ?? getTemplateContent(language, 'empty'),
+pages/Editor/EditorPage.tsx:782:        });
+pages/Editor/EditorPage.tsx:783:        setFiles((fs) => [...fs, response.data]);
+pages/Editor/EditorPage.tsx:784:        setOpenFileIds((ids) => [...ids, response.data.id]);
+pages/Editor/EditorPage.tsx:785:        setActiveFile(response.data);
+pages/Editor/EditorPage.tsx:786:        setSavedContent(response.data.content);
+pages/Editor/EditorPage.tsx:787:        setSavedLanguage(response.data.language);
+pages/Editor/EditorPage.tsx:788:        toast.success(t('toast.file_created'), filename);
+pages/Editor/EditorPage.tsx:789:      } catch {
+pages/Editor/EditorPage.tsx:790:        toast.error(t('toast.failed_create_file'));
+pages/Editor/EditorPage.tsx:791:      }
+pages/Editor/EditorPage.tsx:792:    })();
+pages/Editor/EditorPage.tsx:793:  };
+pages/Editor/EditorPage.tsx:794:
+pages/Editor/EditorPage.tsx:795:  const handleCreateFolder = (name: string, parentId: number | null = null) => {
+pages/Editor/EditorPage.tsx:796:    void (async () => {
+pages/Editor/EditorPage.tsx:797:      try {
+pages/Editor/EditorPage.tsx:798:        const response = await folderService.create(pId, { name, parent_id: parentId });
+pages/Editor/EditorPage.tsx:799:        setFolders((fs) => [...fs, response.data]);
+pages/Editor/EditorPage.tsx:800:        toast.success(t('toast.folder_created'), name);
+pages/Editor/EditorPage.tsx:801:      } catch {
+pages/Editor/EditorPage.tsx:802:        toast.error(t('toast.failed_create_folder'));
+pages/Editor/EditorPage.tsx:803:      }
+pages/Editor/EditorPage.tsx:804:    })();
+pages/Editor/EditorPage.tsx:805:  };
+pages/Editor/EditorPage.tsx:806:
+pages/Editor/EditorPage.tsx:807:  const handleDeleteFile = (file: File) => setDeleteTarget({ kind: 'file', item: file });
+pages/Editor/EditorPage.tsx:808:
+pages/Editor/EditorPage.tsx:809:  const handleDeleteFolder = (folder: Folder) => setDeleteTarget({ kind: 'folder', item: folder });
+pages/Editor/EditorPage.tsx:810:
+pages/Editor/EditorPage.tsx:811:  const confirmDelete = async () => {
+pages/Editor/EditorPage.tsx:812:    if (!deleteTarget) return;
+pages/Editor/EditorPage.tsx:813:    setDeleting(true);
+pages/Editor/EditorPage.tsx:814:    const { kind, item } = deleteTarget;
+pages/Editor/EditorPage.tsx:815:    try {
+pages/Editor/EditorPage.tsx:816:      if (kind === 'file') {
+pages/Editor/EditorPage.tsx:817:        await fileService.delete(item.id);
+pages/Editor/EditorPage.tsx:818:        const next = files.filter((f) => f.id !== item.id);
+pages/Editor/EditorPage.tsx:819:        setFiles(next);
+pages/Editor/EditorPage.tsx:820:        setOpenFileIds((ids) => ids.filter((id) => id !== item.id));
+pages/Editor/EditorPage.tsx:821:        if (activeFile?.id === item.id) activateHead(next);
+pages/Editor/EditorPage.tsx:822:        toast.success(t('toast.file_deleted'), (item as File).filename);
+pages/Editor/EditorPage.tsx:823:      } else {
+pages/Editor/EditorPage.tsx:824:        // Collect the folder and every descendant so the tree update mirrors
+pages/Editor/EditorPage.tsx:825:        // the server-side cascade delete.
+pages/Editor/EditorPage.tsx:826:        const removed = new Set<number>();
+pages/Editor/EditorPage.tsx:827:        const collect = (id: number) => {
+pages/Editor/EditorPage.tsx:828:          removed.add(id);
+pages/Editor/EditorPage.tsx:829:          for (const f of folders) if (f.parent_id === id) collect(f.id);
+pages/Editor/EditorPage.tsx:830:        };
+pages/Editor/EditorPage.tsx:831:        collect((item as Folder).id);
+pages/Editor/EditorPage.tsx:832:        await folderService.delete(item.id);
+pages/Editor/EditorPage.tsx:833:        setFolders((fs) => fs.filter((f) => !removed.has(f.id)));
+pages/Editor/EditorPage.tsx:834:        const nextFiles = files.filter((f) => !(f.folder_id !== null && removed.has(f.folder_id)));
+pages/Editor/EditorPage.tsx:835:        setFiles(nextFiles);
+pages/Editor/EditorPage.tsx:836:        if (activeFile?.id && activeFile.folder_id !== null && removed.has(activeFile.folder_id)) {
+pages/Editor/EditorPage.tsx:837:          activateHead(nextFiles);
+pages/Editor/EditorPage.tsx:838:        }
+pages/Editor/EditorPage.tsx:839:        toast.success(t('toast.folder_deleted'), (item as Folder).name);
+pages/Editor/EditorPage.tsx:840:      }
+pages/Editor/EditorPage.tsx:841:    } catch {
+pages/Editor/EditorPage.tsx:842:      toast.error(kind === 'file' ? t('toast.failed_delete_file') : t('toast.failed_delete_folder'));
+pages/Editor/EditorPage.tsx:843:    } finally {
+pages/Editor/EditorPage.tsx:844:      setDeleting(false);
+pages/Editor/EditorPage.tsx:845:      setDeleteTarget(null);
+pages/Editor/EditorPage.tsx:846:    }
+pages/Editor/EditorPage.tsx:847:  };
+pages/Editor/EditorPage.tsx:848:
+pages/Editor/EditorPage.tsx:849:  const activateHead = (list: File[]) => {
+pages/Editor/EditorPage.tsx:850:    const head = list[0] ?? null;
+pages/Editor/EditorPage.tsx:851:    setActiveFile(head);
+pages/Editor/EditorPage.tsx:852:    setSavedContent(head ? head.content : '');
+pages/Editor/EditorPage.tsx:853:    setSavedLanguage(head ? head.language : 'cpp');
+pages/Editor/EditorPage.tsx:854:  };
+pages/Editor/EditorPage.tsx:855:
+pages/Editor/EditorPage.tsx:856:  const handleRenameFile = (file: File, newName: string) => {
+pages/Editor/EditorPage.tsx:857:    void (async () => {
+pages/Editor/EditorPage.tsx:858:      try {
+pages/Editor/EditorPage.tsx:859:        // A rename that swaps the extension should switch the language too,
+pages/Editor/EditorPage.tsx:860:        // otherwise Run feeds the file to the wrong compiler. Keep the current
+pages/Editor/EditorPage.tsx:861:        // language when the new extension isn't a code one (e.g. `.txt`).
+pages/Editor/EditorPage.tsx:862:        const desiredLanguage = detectLanguage(newName);
+pages/Editor/EditorPage.tsx:863:        const response = await fileService.update(file.id, {
+pages/Editor/EditorPage.tsx:864:          filename: newName,
+pages/Editor/EditorPage.tsx:865:          ...(desiredLanguage && desiredLanguage !== file.language ? { language: desiredLanguage } : {}),
+pages/Editor/EditorPage.tsx:866:        });
+pages/Editor/EditorPage.tsx:867:        // Only take the fields the rename actually changed from the server so
+pages/Editor/EditorPage.tsx:868:        // unsaved local content/language edits are never clobbered.
+pages/Editor/EditorPage.tsx:869:        const patch = {
+pages/Editor/EditorPage.tsx:870:          filename: response.data.filename,
+pages/Editor/EditorPage.tsx:871:          language: response.data.language,
+pages/Editor/EditorPage.tsx:872:          updated_at: response.data.updated_at,
+pages/Editor/EditorPage.tsx:873:        };
+pages/Editor/EditorPage.tsx:874:        setFiles((fs) => fs.map((f) => (f.id === file.id ? { ...f, ...patch } : f)));
+pages/Editor/EditorPage.tsx:875:        setActiveFile((f) => (f?.id === file.id ? { ...f, ...patch } : f));
+pages/Editor/EditorPage.tsx:876:        if (activeFile?.id === file.id) setSavedLanguage(response.data.language);
+pages/Editor/EditorPage.tsx:877:        toast.success(t('toast.renamed'), newName);
+pages/Editor/EditorPage.tsx:878:      } catch {
+pages/Editor/EditorPage.tsx:879:        toast.error(t('toast.failed_rename_file'));
+pages/Editor/EditorPage.tsx:880:      }
+pages/Editor/EditorPage.tsx:881:    })();
+pages/Editor/EditorPage.tsx:882:  };
+pages/Editor/EditorPage.tsx:883:
+pages/Editor/EditorPage.tsx:884:  const handleRenameFolder = (folder: Folder, newName: string) => {
+pages/Editor/EditorPage.tsx:885:    void (async () => {
+pages/Editor/EditorPage.tsx:886:      try {
+pages/Editor/EditorPage.tsx:887:        const response = await folderService.update(folder.id, { name: newName });
+pages/Editor/EditorPage.tsx:888:        const patch = { name: response.data.name, updated_at: response.data.updated_at };
+pages/Editor/EditorPage.tsx:889:        setFolders((fs) => fs.map((f) => (f.id === folder.id ? { ...f, ...patch } : f)));
+pages/Editor/EditorPage.tsx:890:        toast.success(t('toast.renamed'), newName);
+pages/Editor/EditorPage.tsx:891:      } catch {
+pages/Editor/EditorPage.tsx:892:        toast.error(t('toast.failed_rename_folder'));
+pages/Editor/EditorPage.tsx:893:      }
+pages/Editor/EditorPage.tsx:894:    })();
+pages/Editor/EditorPage.tsx:895:  };
+pages/Editor/EditorPage.tsx:896:
+pages/Editor/EditorPage.tsx:897:  const handleMoveFile = (file: File, folderId: number | null) => {
+pages/Editor/EditorPage.tsx:898:    void (async () => {
+pages/Editor/EditorPage.tsx:899:      try {
+pages/Editor/EditorPage.tsx:900:        const response = await fileService.update(file.id, { folder_id: folderId });
+pages/Editor/EditorPage.tsx:901:        const patch = { folder_id: response.data.folder_id, updated_at: response.data.updated_at };
+pages/Editor/EditorPage.tsx:902:        setFiles((fs) => fs.map((f) => (f.id === file.id ? { ...f, ...patch } : f)));
+pages/Editor/EditorPage.tsx:903:        toast.success(t('toast.moved'), file.filename);
+pages/Editor/EditorPage.tsx:904:      } catch {
+pages/Editor/EditorPage.tsx:905:        toast.error(t('toast.failed_move_file'));
+pages/Editor/EditorPage.tsx:906:      }
+pages/Editor/EditorPage.tsx:907:    })();
+pages/Editor/EditorPage.tsx:908:  };
+pages/Editor/EditorPage.tsx:909:
+pages/Editor/EditorPage.tsx:910:  const handleMoveFolder = (folder: Folder, parentId: number | null) => {
+pages/Editor/EditorPage.tsx:911:    void (async () => {
+pages/Editor/EditorPage.tsx:912:      try {
+pages/Editor/EditorPage.tsx:913:        const response = await folderService.update(folder.id, { parent_id: parentId });
+pages/Editor/EditorPage.tsx:914:        const patch = { parent_id: response.data.parent_id, updated_at: response.data.updated_at };
+pages/Editor/EditorPage.tsx:915:        setFolders((fs) => fs.map((f) => (f.id === folder.id ? { ...f, ...patch } : f)));
+pages/Editor/EditorPage.tsx:916:        toast.success(t('toast.moved'), folder.name);
+pages/Editor/EditorPage.tsx:917:      } catch {
+pages/Editor/EditorPage.tsx:918:        toast.error(t('toast.failed_move_folder'));
+pages/Editor/EditorPage.tsx:919:      }
+pages/Editor/EditorPage.tsx:920:    })();
+pages/Editor/EditorPage.tsx:921:  };
+pages/Editor/EditorPage.tsx:922:
+pages/Editor/EditorPage.tsx:923:  const handleDownload = () => {
+pages/Editor/EditorPage.tsx:924:    if (!activeFile) return;
+pages/Editor/EditorPage.tsx:925:    const blob = new Blob([activeFile.content], { type: 'text/plain' });
+pages/Editor/EditorPage.tsx:926:    const url = URL.createObjectURL(blob);
+pages/Editor/EditorPage.tsx:927:    const a = document.createElement('a');
+pages/Editor/EditorPage.tsx:928:    a.href = url;
+pages/Editor/EditorPage.tsx:929:    a.download = activeFile.filename;
+pages/Editor/EditorPage.tsx:930:    a.click();
+pages/Editor/EditorPage.tsx:931:    URL.revokeObjectURL(url);
+pages/Editor/EditorPage.tsx:932:    toast.success(t('toast.downloaded'), activeFile.filename);
+pages/Editor/EditorPage.tsx:933:  };
+pages/Editor/EditorPage.tsx:934:
+pages/Editor/EditorPage.tsx:935:  const handleShare = async () => {
+pages/Editor/EditorPage.tsx:936:    if (!activeFile) return;
+pages/Editor/EditorPage.tsx:937:    const shareData: ShareData = {
+pages/Editor/EditorPage.tsx:938:      title: `${project?.name ?? 'CodeRunner'} — ${activeFile.filename}`,
+pages/Editor/EditorPage.tsx:939:      text: `Check out this ${activeFile.filename} on CodeRunner:\n\n${activeFile.content}`,
+pages/Editor/EditorPage.tsx:940:    };
+pages/Editor/EditorPage.tsx:941:    try {
+pages/Editor/EditorPage.tsx:942:      if (navigator.share) {
+pages/Editor/EditorPage.tsx:943:        await navigator.share(shareData);
+pages/Editor/EditorPage.tsx:944:      } else {
+pages/Editor/EditorPage.tsx:945:        await navigator.clipboard.writeText(shareData.text ?? '');
+pages/Editor/EditorPage.tsx:946:        toast.success(t('toast.copied_clipboard'), t('toast.ready_to_paste', { name: activeFile.filename }));
+pages/Editor/EditorPage.tsx:947:      }
+pages/Editor/EditorPage.tsx:948:    } catch {
+pages/Editor/EditorPage.tsx:949:      /* user cancelled the share sheet */
+pages/Editor/EditorPage.tsx:950:    }
+pages/Editor/EditorPage.tsx:951:  };
+pages/Editor/EditorPage.tsx:952:
+pages/Editor/EditorPage.tsx:953:  const mobileNav: { key: MobileTab; label: string; icon: 'folder' | 'code' | 'terminal' | 'moreV' }[] = [
+pages/Editor/EditorPage.tsx:954:    { key: 'files', label: t('nav.files'), icon: 'folder' },
+pages/Editor/EditorPage.tsx:955:    { key: 'code', label: t('nav.code'), icon: 'code' },
+pages/Editor/EditorPage.tsx:956:    { key: 'output', label: t('nav.output'), icon: 'terminal' },
+pages/Editor/EditorPage.tsx:957:    { key: 'more', label: t('nav.more'), icon: 'moreV' },
+pages/Editor/EditorPage.tsx:958:  ];
+pages/Editor/EditorPage.tsx:959:
+pages/Editor/EditorPage.tsx:960:  if (loading) {
+pages/Editor/EditorPage.tsx:961:    return (
+pages/Editor/EditorPage.tsx:962:      <div className="flex h-full flex-1 items-center justify-center bg-page">
+pages/Editor/EditorPage.tsx:963:        <Spinner size="lg" className="text-primary" />
+pages/Editor/EditorPage.tsx:964:      </div>
+pages/Editor/EditorPage.tsx:965:    );
+pages/Editor/EditorPage.tsx:966:  }
+pages/Editor/EditorPage.tsx:967:
+pages/Editor/EditorPage.tsx:968:  return (
+pages/Editor/EditorPage.tsx:969:    <div className="flex min-h-0 flex-1 flex-col bg-page text-ink">
+pages/Editor/EditorPage.tsx:970:      <EditorTopBar
+pages/Editor/EditorPage.tsx:971:        projectName={project?.name ?? null}
+pages/Editor/EditorPage.tsx:972:        fileName={activeFile?.filename}
+pages/Editor/EditorPage.tsx:973:        isSaving={isSaving}
+pages/Editor/EditorPage.tsx:974:        dirty={dirty}
+pages/Editor/EditorPage.tsx:975:        running={isRunning}
+pages/Editor/EditorPage.tsx:976:        canRun={!!activeFile}
+pages/Editor/EditorPage.tsx:977:        onSave={() => void handleSave()}
+pages/Editor/EditorPage.tsx:978:        onRun={() => void handleRun(false)}
+pages/Editor/EditorPage.tsx:979:        onStop={() => stopLiveSession()}
+pages/Editor/EditorPage.tsx:980:        onShare={() => void handleShare()}
+pages/Editor/EditorPage.tsx:981:        onDownload={handleDownload}
+pages/Editor/EditorPage.tsx:982:        onToggleSidebar={sidebar.toggle}
+pages/Editor/EditorPage.tsx:983:        sidebarVisible={!sidebar.collapsed}
+pages/Editor/EditorPage.tsx:984:      />
+pages/Editor/EditorPage.tsx:985:
+pages/Editor/EditorPage.tsx:986:      <div className="flex min-h-0 flex-1">
+pages/Editor/EditorPage.tsx:987:        {/* Desktop + Files tab (mobile) */}
+pages/Editor/EditorPage.tsx:988:        <aside
+pages/Editor/EditorPage.tsx:989:          className={cn(
+pages/Editor/EditorPage.tsx:990:            'group/sb relative border-r border-edge bg-raised/50 hidden lg:block lg:shrink-0',
+pages/Editor/EditorPage.tsx:991:            sidebar.collapsed ? 'lg:hidden' : '',
+pages/Editor/EditorPage.tsx:992:          )}
+pages/Editor/EditorPage.tsx:993:          style={{ width: sidebar.collapsed ? 0 : sidebar.size }}
+pages/Editor/EditorPage.tsx:994:        >
+pages/Editor/EditorPage.tsx:995:          <FileExplorerSidebar
+pages/Editor/EditorPage.tsx:996:            files={files}
+pages/Editor/EditorPage.tsx:997:            folders={folders}
+pages/Editor/EditorPage.tsx:998:            activeFileId={activeFile?.id ?? null}
+pages/Editor/EditorPage.tsx:999:            projectName={project?.name ?? 'Project'}
+pages/Editor/EditorPage.tsx:1000:            onSelectFile={handleSelectFile}
+pages/Editor/EditorPage.tsx:1001:            onCreateFile={handleCreateFile}
+pages/Editor/EditorPage.tsx:1002:            onCreateFolder={handleCreateFolder}
+pages/Editor/EditorPage.tsx:1003:            onDeleteFile={handleDeleteFile}
+pages/Editor/EditorPage.tsx:1004:            onDeleteFolder={handleDeleteFolder}
+pages/Editor/EditorPage.tsx:1005:            onRenameFile={handleRenameFile}
+pages/Editor/EditorPage.tsx:1006:            onRenameFolder={handleRenameFolder}
+pages/Editor/EditorPage.tsx:1007:            onMoveFile={handleMoveFile}
+pages/Editor/EditorPage.tsx:1008:            onMoveFolder={handleMoveFolder}
+pages/Editor/EditorPage.tsx:1009:          />
+pages/Editor/EditorPage.tsx:1010:<button
+pages/Editor/EditorPage.tsx:1011:              type="button"
+pages/Editor/EditorPage.tsx:1012:              onMouseDown={sidebar.onMouseDown}
+pages/Editor/EditorPage.tsx:1013:              onTouchStart={sidebar.onTouchStart}
+pages/Editor/EditorPage.tsx:1014:              onClick={sidebar.onClick}
+pages/Editor/EditorPage.tsx:1015:              className="absolute inset-y-0 -right-1 z-10 w-2.5 cursor-col-resize touch-none transition-colors hover:bg-primary/40"
+pages/Editor/EditorPage.tsx:1016:              aria-label="Resize sidebar"
+pages/Editor/EditorPage.tsx:1017:            />
+pages/Editor/EditorPage.tsx:1018:        </aside>
+pages/Editor/EditorPage.tsx:1019:
+pages/Editor/EditorPage.tsx:1020:        {mobileTab === 'files' && (
+pages/Editor/EditorPage.tsx:1021:          <div className="min-h-0 flex-1 bg-raised/50 lg:hidden">
+pages/Editor/EditorPage.tsx:1022:            <FileExplorerSidebar
+pages/Editor/EditorPage.tsx:1023:              files={files}
+pages/Editor/EditorPage.tsx:1024:              folders={folders}
+pages/Editor/EditorPage.tsx:1025:              activeFileId={activeFile?.id ?? null}
+pages/Editor/EditorPage.tsx:1026:              projectName={project?.name ?? 'Project'}
+pages/Editor/EditorPage.tsx:1027:              onSelectFile={(file) => {
+pages/Editor/EditorPage.tsx:1028:                handleSelectFile(file);
+pages/Editor/EditorPage.tsx:1029:                setMobileTab('code');
+pages/Editor/EditorPage.tsx:1030:              }}
+pages/Editor/EditorPage.tsx:1031:              onCreateFile={handleCreateFile}
+pages/Editor/EditorPage.tsx:1032:              onCreateFolder={handleCreateFolder}
+pages/Editor/EditorPage.tsx:1033:              onDeleteFile={handleDeleteFile}
+pages/Editor/EditorPage.tsx:1034:              onDeleteFolder={handleDeleteFolder}
+pages/Editor/EditorPage.tsx:1035:              onRenameFile={handleRenameFile}
+pages/Editor/EditorPage.tsx:1036:              onRenameFolder={handleRenameFolder}
+pages/Editor/EditorPage.tsx:1037:              onMoveFile={handleMoveFile}
+pages/Editor/EditorPage.tsx:1038:              onMoveFolder={handleMoveFolder}
+pages/Editor/EditorPage.tsx:1039:            />
+pages/Editor/EditorPage.tsx:1040:          </div>
+pages/Editor/EditorPage.tsx:1041:        )}
+pages/Editor/EditorPage.tsx:1042:
+pages/Editor/EditorPage.tsx:1043:        {(mobileTab === 'code' || mobileTab === 'more') && (
+pages/Editor/EditorPage.tsx:1044:          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+pages/Editor/EditorPage.tsx:1045:            <EditorTabs
+pages/Editor/EditorPage.tsx:1046:              files={openFiles}
+pages/Editor/EditorPage.tsx:1047:              activeFileId={activeFile?.id ?? null}
+pages/Editor/EditorPage.tsx:1048:              dirtyIds={new Set(dirty && activeFile ? [activeFile.id] : [])}
+pages/Editor/EditorPage.tsx:1049:              onSelect={handleSelectFile}
+pages/Editor/EditorPage.tsx:1050:              onCloseTab={handleCloseTab}
+pages/Editor/EditorPage.tsx:1051:            />
+pages/Editor/EditorPage.tsx:1052:
+pages/Editor/EditorPage.tsx:1053:            <div className="flex min-h-0 flex-1 overflow-hidden">
+pages/Editor/EditorPage.tsx:1054:              {activeFile ? (
+pages/Editor/EditorPage.tsx:1055:                <CodeEditor
+pages/Editor/EditorPage.tsx:1056:                  ref={editorRef}
+pages/Editor/EditorPage.tsx:1057:                  value={activeFile.content}
+pages/Editor/EditorPage.tsx:1058:                  language={selectedLanguage}
+pages/Editor/EditorPage.tsx:1059:                  onChange={handleCodeChange}
+pages/Editor/EditorPage.tsx:1060:                  onCursorChange={(line, column) => setCursor({ line, column })}
+pages/Editor/EditorPage.tsx:1061:                />
+pages/Editor/EditorPage.tsx:1062:              ) : (
+pages/Editor/EditorPage.tsx:1063:                <div className="flex flex-1 items-center justify-center bg-editor">
+pages/Editor/EditorPage.tsx:1064:                  <EmptyState
+pages/Editor/EditorPage.tsx:1065:                    icon="fileText"
+pages/Editor/EditorPage.tsx:1066:                    title={t('editor.no_file')}
+pages/Editor/EditorPage.tsx:1067:                    message={t('editor.select_file')}
+pages/Editor/EditorPage.tsx:1068:                    action={
+pages/Editor/EditorPage.tsx:1069:                      <Button size="sm" onClick={() => handleCreateFile('main.cpp', 'cpp')}>
+pages/Editor/EditorPage.tsx:1070:                        <Icon name="filePlus" size={15} />
+pages/Editor/EditorPage.tsx:1071:                        {t('editor.create_main')}
+pages/Editor/EditorPage.tsx:1072:                      </Button>
+pages/Editor/EditorPage.tsx:1073:                    }
+pages/Editor/EditorPage.tsx:1074:                  />
+pages/Editor/EditorPage.tsx:1075:                </div>
+pages/Editor/EditorPage.tsx:1076:              )}
+pages/Editor/EditorPage.tsx:1077:            </div>
+pages/Editor/EditorPage.tsx:1078:
+pages/Editor/EditorPage.tsx:1079:            <div
+pages/Editor/EditorPage.tsx:1080:              className="group/panel flex shrink-0 flex-col"
+pages/Editor/EditorPage.tsx:1081:              style={{ height: panel.collapsed ? 0 : panel.size }}
+pages/Editor/EditorPage.tsx:1082:            >
+pages/Editor/EditorPage.tsx:1083:              <button
+pages/Editor/EditorPage.tsx:1084:                type="button"
+pages/Editor/EditorPage.tsx:1085:                onMouseDown={panel.onMouseDown}
+pages/Editor/EditorPage.tsx:1086:                onTouchStart={panel.onTouchStart}
+pages/Editor/EditorPage.tsx:1087:                onClick={panel.onClick}
+pages/Editor/EditorPage.tsx:1088:                className="flex h-4 w-full shrink-0 cursor-row-resize touch-none items-center justify-center gap-2 bg-edge/40 transition-colors hover:bg-primary/25 lg:h-3"
+pages/Editor/EditorPage.tsx:1089:                aria-label={panel.collapsed ? t('terminal.show_panel') : t('terminal.hide_panel')}
+pages/Editor/EditorPage.tsx:1090:                title={panel.collapsed ? t('terminal.show_panel') : t('terminal.hide_panel')}
+pages/Editor/EditorPage.tsx:1091:              >
+pages/Editor/EditorPage.tsx:1092:                <span className="h-0.5 w-8 rounded-full bg-faint/50 transition-colors group-hover/panel:bg-primary/70" />
+pages/Editor/EditorPage.tsx:1093:                <Icon
+pages/Editor/EditorPage.tsx:1094:                  name={panel.collapsed ? 'chevronUp' : 'chevronDown'}
+pages/Editor/EditorPage.tsx:1095:                  size={12}
+pages/Editor/EditorPage.tsx:1096:                  className="shrink-0 text-faint transition-colors group-hover/panel:text-primary"
+pages/Editor/EditorPage.tsx:1097:                />
+pages/Editor/EditorPage.tsx:1098:              </button>
+pages/Editor/EditorPage.tsx:1099:              <div className="min-h-0 flex-1 overflow-hidden">
+pages/Editor/EditorPage.tsx:1100:                <TerminalPanel
+pages/Editor/EditorPage.tsx:1101:                  ref={terminalPanelRef}
+pages/Editor/EditorPage.tsx:1102:                  execution={execution}
+pages/Editor/EditorPage.tsx:1103:                  isRunning={isRunning}
+pages/Editor/EditorPage.tsx:1104:                  hasErrors={hasErrors}
+pages/Editor/EditorPage.tsx:1105:                  tab={terminalTab}
+pages/Editor/EditorPage.tsx:1106:                  onTabChange={setTerminalTab}
+pages/Editor/EditorPage.tsx:1107:                  activeLanguage={activeFile?.language}
+pages/Editor/EditorPage.tsx:1108:                  fileContent={activeFile?.content}
+pages/Editor/EditorPage.tsx:1109:                  onGoToLine={handleGoToErrorLine}
+pages/Editor/EditorPage.tsx:1110:                  onApplyFix={handleApplyFix}
+pages/Editor/EditorPage.tsx:1111:                  inputLines={inputLines}
+pages/Editor/EditorPage.tsx:1112:                  onInputLinesChange={handleInputLinesChange}
+pages/Editor/EditorPage.tsx:1113:                  consoleRef={consoleRef}
+pages/Editor/EditorPage.tsx:1114:                  onFocusConsole={handleFocusConsole}
+pages/Editor/EditorPage.tsx:1115:                  onInputReady={handleInputReady}
+pages/Editor/EditorPage.tsx:1116:                  onAllLinesCommitted={handleAllLinesCommitted}
+pages/Editor/EditorPage.tsx:1117:                  onClear={handleClearTerminal}
+pages/Editor/EditorPage.tsx:1118:                  liveOutputB64={liveOutputB64}
+pages/Editor/EditorPage.tsx:1119:                  liveTruncated={liveTruncated}
+pages/Editor/EditorPage.tsx:1120:                  liveActive={liveSessionId !== null}
+pages/Editor/EditorPage.tsx:1121:                  onRawInput={handleRawInput}
+pages/Editor/EditorPage.tsx:1122:                  onResize={handleLiveResize}
+pages/Editor/EditorPage.tsx:1123:                  onLiveStop={() => stopLiveSession()}
+pages/Editor/EditorPage.tsx:1124:                />
+pages/Editor/EditorPage.tsx:1125:              </div>
+pages/Editor/EditorPage.tsx:1126:            </div>
+pages/Editor/EditorPage.tsx:1127:          </main>
+pages/Editor/EditorPage.tsx:1128:        )}
+pages/Editor/EditorPage.tsx:1129:
+pages/Editor/EditorPage.tsx:1130:         {mobileTab === 'output' && (
+pages/Editor/EditorPage.tsx:1131:           <main className="flex min-h-0 flex-1 flex-col pt-px lg:hidden">
+pages/Editor/EditorPage.tsx:1132:             <TerminalPanel
+pages/Editor/EditorPage.tsx:1133:               ref={terminalPanelRef}
+pages/Editor/EditorPage.tsx:1134:               execution={execution}
+pages/Editor/EditorPage.tsx:1135:               isRunning={isRunning}
+pages/Editor/EditorPage.tsx:1136:               hasErrors={hasErrors}
+pages/Editor/EditorPage.tsx:1137:               tab={terminalTab}
+pages/Editor/EditorPage.tsx:1138:               onTabChange={setTerminalTab}
+pages/Editor/EditorPage.tsx:1139:               activeLanguage={activeFile?.language}
+pages/Editor/EditorPage.tsx:1140:               fileContent={activeFile?.content}
+pages/Editor/EditorPage.tsx:1141:               onGoToLine={handleGoToErrorLine}
+pages/Editor/EditorPage.tsx:1142:               onApplyFix={handleApplyFix}
+pages/Editor/EditorPage.tsx:1143:               inputLines={inputLines}
+pages/Editor/EditorPage.tsx:1144:               onInputLinesChange={handleInputLinesChange}
+pages/Editor/EditorPage.tsx:1145:               consoleRef={consoleRef}
+pages/Editor/EditorPage.tsx:1146:               onFocusConsole={handleFocusConsole}
+pages/Editor/EditorPage.tsx:1147:               onInputReady={handleInputReady}
+pages/Editor/EditorPage.tsx:1148:               onAllLinesCommitted={handleAllLinesCommitted}
+pages/Editor/EditorPage.tsx:1149:               onClear={handleClearTerminal}
+pages/Editor/EditorPage.tsx:1150:               liveOutputB64={liveOutputB64}
+pages/Editor/EditorPage.tsx:1151:               liveTruncated={liveTruncated}
+pages/Editor/EditorPage.tsx:1152:               liveActive={liveSessionId !== null}
+pages/Editor/EditorPage.tsx:1153:               onRawInput={handleRawInput}
+pages/Editor/EditorPage.tsx:1154:               onResize={handleLiveResize}
+pages/Editor/EditorPage.tsx:1155:               onLiveStop={() => stopLiveSession()}
+pages/Editor/EditorPage.tsx:1156:             />
+pages/Editor/EditorPage.tsx:1157:           </main>
+pages/Editor/EditorPage.tsx:1158:         )}
+pages/Editor/EditorPage.tsx:1159:      </div>
+pages/Editor/EditorPage.tsx:1160:
+pages/Editor/EditorPage.tsx:1161:      <div className="hidden lg:block">
+pages/Editor/EditorPage.tsx:1162:        <StatusBar
+pages/Editor/EditorPage.tsx:1163:          languages={languages}
+pages/Editor/EditorPage.tsx:1164:          selectedLanguage={selectedLanguage}
+pages/Editor/EditorPage.tsx:1165:          onLanguageChange={handleLanguageChange}
+pages/Editor/EditorPage.tsx:1166:          fileCount={files.length}
+pages/Editor/EditorPage.tsx:1167:          fileName={activeFile?.filename}
+pages/Editor/EditorPage.tsx:1168:          running={isRunning}
+pages/Editor/EditorPage.tsx:1169:          cursorLine={cursor.line}
+pages/Editor/EditorPage.tsx:1170:          cursorColumn={cursor.column}
+pages/Editor/EditorPage.tsx:1171:        />
+pages/Editor/EditorPage.tsx:1172:      </div>
+pages/Editor/EditorPage.tsx:1173:
+pages/Editor/EditorPage.tsx:1174:      {/* Mobile Run/Stop FAB — Run when idle, Stop while a run is in flight */}
+pages/Editor/EditorPage.tsx:1175:      {(mobileTab === 'code' || mobileTab === 'output') && activeFile && (
+pages/Editor/EditorPage.tsx:1176:        <button
+pages/Editor/EditorPage.tsx:1177:          onClick={() => (isRunning ? stopLiveSession() : void handleRun())}
+pages/Editor/EditorPage.tsx:1178:          className={cn(
+pages/Editor/EditorPage.tsx:1179:            'fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-40 flex h-13 w-13 items-center justify-center rounded-full text-white transition-all active:scale-95 lg:hidden',
+pages/Editor/EditorPage.tsx:1180:            isRunning ? 'cr-btn-stop' : 'cr-btn-run',
+pages/Editor/EditorPage.tsx:1181:          )}
+pages/Editor/EditorPage.tsx:1182:          aria-label={isRunning ? t('editor.stop_program') : 'Run code'}
+pages/Editor/EditorPage.tsx:1183:          title={isRunning ? t('editor.stop_program') : 'Run'}
+pages/Editor/EditorPage.tsx:1184:        >
+pages/Editor/EditorPage.tsx:1185:          {isRunning ? (
+pages/Editor/EditorPage.tsx:1186:            <>
+pages/Editor/EditorPage.tsx:1187:              <Icon name="stop" size={22} />
+pages/Editor/EditorPage.tsx:1188:              <span className="absolute right-2.5 top-2.5 flex h-3 w-3">
+pages/Editor/EditorPage.tsx:1189:                <span className="inline-flex h-3 w-3 animate-ping rounded-full bg-white/40" />
+pages/Editor/EditorPage.tsx:1190:                <span className="absolute inline-flex h-3 w-3 rounded-full bg-white" />
+pages/Editor/EditorPage.tsx:1191:              </span>
+pages/Editor/EditorPage.tsx:1192:            </>
+pages/Editor/EditorPage.tsx:1193:          ) : (
+pages/Editor/EditorPage.tsx:1194:            <Icon name="play" size={22} className="ml-0.5 fill-current" />
+pages/Editor/EditorPage.tsx:1195:          )}
+pages/Editor/EditorPage.tsx:1196:        </button>
+pages/Editor/EditorPage.tsx:1197:      )}
+pages/Editor/EditorPage.tsx:1198:
+pages/Editor/EditorPage.tsx:1199:      {/* Mobile bottom nav */}
+pages/Editor/EditorPage.tsx:1200:      <nav
+pages/Editor/EditorPage.tsx:1201:        className="fixed inset-x-0 bottom-0 z-40 flex min-h-16 items-stretch border-t border-edge bg-page/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+pages/Editor/EditorPage.tsx:1202:        aria-label="Mobile navigation"
+pages/Editor/EditorPage.tsx:1203:      >
+pages/Editor/EditorPage.tsx:1204:        {mobileNav.map((item) => {
+pages/Editor/EditorPage.tsx:1205:          const active = mobileTab === item.key;
+pages/Editor/EditorPage.tsx:1206:          return (
+pages/Editor/EditorPage.tsx:1207:            <button
+pages/Editor/EditorPage.tsx:1208:              key={item.key}
+pages/Editor/EditorPage.tsx:1209:              onClick={() => {
+pages/Editor/EditorPage.tsx:1210:                if (item.key === 'more') {
+pages/Editor/EditorPage.tsx:1211:                  setMoreOpen(true);
+pages/Editor/EditorPage.tsx:1212:                  return;
+pages/Editor/EditorPage.tsx:1213:                }
+pages/Editor/EditorPage.tsx:1214:                setMobileTab(item.key);
+pages/Editor/EditorPage.tsx:1215:              }}
+pages/Editor/EditorPage.tsx:1216:              className={cn(
+pages/Editor/EditorPage.tsx:1217:                'flex flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors',
+pages/Editor/EditorPage.tsx:1218:                active ? 'text-primary' : 'text-mute hover:text-ink',
+pages/Editor/EditorPage.tsx:1219:              )}
+pages/Editor/EditorPage.tsx:1220:            >
+pages/Editor/EditorPage.tsx:1221:              <Icon name={item.icon} size={19} />
+pages/Editor/EditorPage.tsx:1222:              {item.label}
+pages/Editor/EditorPage.tsx:1223:            </button>
+pages/Editor/EditorPage.tsx:1224:          );
+pages/Editor/EditorPage.tsx:1225:        })}
+pages/Editor/EditorPage.tsx:1226:      </nav>
+pages/Editor/EditorPage.tsx:1227:
+pages/Editor/EditorPage.tsx:1228:      {/* Mobile More sheet */}
+pages/Editor/EditorPage.tsx:1229:      <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)} title={t('editor.options')}>
+pages/Editor/EditorPage.tsx:1230:        <div className="flex flex-col gap-1.5">
+pages/Editor/EditorPage.tsx:1231:          <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">{t('editor.language')}</p>
+pages/Editor/EditorPage.tsx:1232:          <div className="flex flex-col gap-1">
+pages/Editor/EditorPage.tsx:1233:            {languages.map((lang) => {
+pages/Editor/EditorPage.tsx:1234:              const active = lang.slug === selectedLanguage;
+pages/Editor/EditorPage.tsx:1235:              const glyph =
+pages/Editor/EditorPage.tsx:1236:                lang.slug === 'python' ? ('python' as const) : lang.slug === 'c' ? ('c' as const) : ('cpp' as const);
+pages/Editor/EditorPage.tsx:1237:              return (
+pages/Editor/EditorPage.tsx:1238:                <button
+pages/Editor/EditorPage.tsx:1239:                  key={lang.id}
+pages/Editor/EditorPage.tsx:1240:                  onClick={() => handleLanguageChange(lang.slug)}
+pages/Editor/EditorPage.tsx:1241:                  className={cn(
+pages/Editor/EditorPage.tsx:1242:                    'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors',
+pages/Editor/EditorPage.tsx:1243:                    active ? 'bg-primary/10' : 'hover:bg-raised',
+pages/Editor/EditorPage.tsx:1244:                  )}
+pages/Editor/EditorPage.tsx:1245:                >
+pages/Editor/EditorPage.tsx:1246:                  <LanguageIcon lang={glyph} size="sm" />
+pages/Editor/EditorPage.tsx:1247:                  <span className="min-w-0 flex-1">
+pages/Editor/EditorPage.tsx:1248:                    <span className="block text-[13px] font-medium text-ink">{lang.name}</span>
+pages/Editor/EditorPage.tsx:1249:                    <span className="block text-[11px] text-faint">
+pages/Editor/EditorPage.tsx:1250:                      {lang.compile_command ? `${lang.compile_command} compiler` : `${lang.run_command} runtime`}
+pages/Editor/EditorPage.tsx:1251:                    </span>
+pages/Editor/EditorPage.tsx:1252:                  </span>
+pages/Editor/EditorPage.tsx:1253:                  {active && <Icon name="check" size={16} className="shrink-0 text-primary" />}
+pages/Editor/EditorPage.tsx:1254:                </button>
+pages/Editor/EditorPage.tsx:1255:              );
+pages/Editor/EditorPage.tsx:1256:            })}
+pages/Editor/EditorPage.tsx:1257:          </div>
+pages/Editor/EditorPage.tsx:1258:          <div className="mt-2 grid grid-cols-2 gap-2">
+pages/Editor/EditorPage.tsx:1259:            <Button variant="secondary" onClick={() => void handleSave()} disabled={!activeFile}>
+pages/Editor/EditorPage.tsx:1260:              <Icon name="save" size={15} />
+pages/Editor/EditorPage.tsx:1261:              {t('editor.save')}
+pages/Editor/EditorPage.tsx:1262:            </Button>
+pages/Editor/EditorPage.tsx:1263:            <Button variant="secondary" onClick={toggle}>
+pages/Editor/EditorPage.tsx:1264:              <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} />
+pages/Editor/EditorPage.tsx:1265:              {theme === 'dark' ? t('editor.light_mode') : t('editor.dark_mode')}
+pages/Editor/EditorPage.tsx:1266:            </Button>
+pages/Editor/EditorPage.tsx:1267:            <Button variant="secondary" onClick={handleDownload} disabled={!activeFile}>
+pages/Editor/EditorPage.tsx:1268:              <Icon name="download" size={15} />
+pages/Editor/EditorPage.tsx:1269:              {t('editor.download_file')}
+pages/Editor/EditorPage.tsx:1270:            </Button>
+pages/Editor/EditorPage.tsx:1271:            <Button variant="secondary" onClick={() => void handleShare()} disabled={!activeFile}>
+pages/Editor/EditorPage.tsx:1272:              <Icon name="share" size={15} />
+pages/Editor/EditorPage.tsx:1273:              {t('editor.share_file')}
+pages/Editor/EditorPage.tsx:1274:            </Button>
+pages/Editor/EditorPage.tsx:1275:          </div>
+pages/Editor/EditorPage.tsx:1276:        </div>
+pages/Editor/EditorPage.tsx:1277:      </BottomSheet>
+pages/Editor/EditorPage.tsx:1278:
+pages/Editor/EditorPage.tsx:1279:      <ConfirmDialog
+pages/Editor/EditorPage.tsx:1280:        open={!!deleteTarget}
+pages/Editor/EditorPage.tsx:1281:        onClose={() => setDeleteTarget(null)}
+pages/Editor/EditorPage.tsx:1282:        onConfirm={() => void confirmDelete()}
+pages/Editor/EditorPage.tsx:1283:        loading={deleting}
+pages/Editor/EditorPage.tsx:1284:        title={
+pages/Editor/EditorPage.tsx:1285:          deleteTarget?.kind === 'folder'
+pages/Editor/EditorPage.tsx:1286:            ? t('editor.delete_folder_confirm_title', { name: (deleteTarget.item as Folder).name })
+pages/Editor/EditorPage.tsx:1287:            : t('editor.delete_confirm_title', { name: (deleteTarget?.item as File | undefined)?.filename ?? '' })
+pages/Editor/EditorPage.tsx:1288:        }
+pages/Editor/EditorPage.tsx:1289:        message={
+pages/Editor/EditorPage.tsx:1290:          deleteTarget?.kind === 'folder'
+pages/Editor/EditorPage.tsx:1291:            ? t('editor.delete_folder_confirm_msg')
+pages/Editor/EditorPage.tsx:1292:            : t('editor.delete_confirm_msg')
+pages/Editor/EditorPage.tsx:1293:        }
+pages/Editor/EditorPage.tsx:1294:        confirmLabel={
+pages/Editor/EditorPage.tsx:1295:          deleteTarget?.kind === 'folder' ? t('editor.delete_folder_confirm_btn') : t('editor.delete_confirm_btn')
+pages/Editor/EditorPage.tsx:1296:        }
+pages/Editor/EditorPage.tsx:1297:      />
+pages/Editor/EditorPage.tsx:1298:
+pages/Editor/EditorPage.tsx:1299:      <div className="h-[calc(4rem+env(safe-area-inset-bottom))] lg:hidden" aria-hidden="true" />
+pages/Editor/EditorPage.tsx:1300:    </div>
+pages/Editor/EditorPage.tsx:1301:  );
+pages/Editor/EditorPage.tsx:1302:}
+pages/Editor/EditorPage.tsx:1303:
+pages/Editor/EditorPage.tsx:1304:
+pages/Dashboard/NewProjectModal.tsx:1:import { useMemo, useState, type FormEvent } from 'react';
+pages/Dashboard/NewProjectModal.tsx:2:import { useNavigate } from 'react-router-dom';
+pages/Dashboard/NewProjectModal.tsx:3:import { Modal } from '../../components/ui/Modal';
+pages/Dashboard/NewProjectModal.tsx:4:import { Button } from '../../components/ui/Button';
+pages/Dashboard/NewProjectModal.tsx:5:import { Input } from '../../components/ui/Input';
+pages/Dashboard/NewProjectModal.tsx:6:import { Icon } from '../../components/ui/Icon';
+pages/Dashboard/NewProjectModal.tsx:7:import { cn } from '../../lib/cn';
+pages/Dashboard/NewProjectModal.tsx:8:import { TEMPLATES, getTemplateContent, type TemplateId } from '../../lib/templates';
+pages/Dashboard/NewProjectModal.tsx:9:import { LanguageIcon } from '../../components/LanguageIcon';
+pages/Dashboard/NewProjectModal.tsx:10:import { projectService } from '../../services/projectService';
+pages/Dashboard/NewProjectModal.tsx:11:import { fileService } from '../../services/fileService';
+pages/Dashboard/NewProjectModal.tsx:12:import { useToast } from '../../context/ToastContext';
+pages/Dashboard/NewProjectModal.tsx:13:import { useI18n, type TranslationKey } from '../../i18n';
+pages/Dashboard/NewProjectModal.tsx:14:
+pages/Dashboard/NewProjectModal.tsx:15:const LANG_EXTS: Record<string, { ext: string; glyph: 'c' | 'cpp' | 'python' }> = {
+pages/Dashboard/NewProjectModal.tsx:16:  c: { ext: 'main.c', glyph: 'c' },
+pages/Dashboard/NewProjectModal.tsx:17:  cpp: { ext: 'main.cpp', glyph: 'cpp' },
+pages/Dashboard/NewProjectModal.tsx:18:  python: { ext: 'main.py', glyph: 'python' },
+pages/Dashboard/NewProjectModal.tsx:19:};
+pages/Dashboard/NewProjectModal.tsx:20:
+pages/Dashboard/NewProjectModal.tsx:21:const TEMPLATE_KEYS: Record<TemplateId, { label: TranslationKey; desc: TranslationKey }> = {
+pages/Dashboard/NewProjectModal.tsx:22:  empty: { label: 'template.empty', desc: 'template.empty_desc' },
+pages/Dashboard/NewProjectModal.tsx:23:  hello: { label: 'template.hello_world', desc: 'template.hello_world_desc' },
+pages/Dashboard/NewProjectModal.tsx:24:  basic: { label: 'template.basic', desc: 'template.basic_desc' },
+pages/Dashboard/NewProjectModal.tsx:25:  competitive: { label: 'template.competitive', desc: 'template.competitive_desc' },
+pages/Dashboard/NewProjectModal.tsx:26:};
+pages/Dashboard/NewProjectModal.tsx:27:
+pages/Dashboard/NewProjectModal.tsx:28:export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+pages/Dashboard/NewProjectModal.tsx:29:  const navigate = useNavigate();
+pages/Dashboard/NewProjectModal.tsx:30:  const toast = useToast();
+pages/Dashboard/NewProjectModal.tsx:31:  const { t } = useI18n();
+pages/Dashboard/NewProjectModal.tsx:32:
+pages/Dashboard/NewProjectModal.tsx:33:  const [name, setName] = useState('');
+pages/Dashboard/NewProjectModal.tsx:34:  const [description, setDescription] = useState('');
+pages/Dashboard/NewProjectModal.tsx:35:  const [language, setLanguage] = useState('cpp');
+pages/Dashboard/NewProjectModal.tsx:36:  const [template, setTemplate] = useState<TemplateId>('hello');
+pages/Dashboard/NewProjectModal.tsx:37:  const [error, setError] = useState('');
+pages/Dashboard/NewProjectModal.tsx:38:  const [submitting, setSubmitting] = useState(false);
+pages/Dashboard/NewProjectModal.tsx:39:
+pages/Dashboard/NewProjectModal.tsx:40:  const filename = LANG_EXTS[language]?.ext ?? 'main.cpp';
+pages/Dashboard/NewProjectModal.tsx:41:
+pages/Dashboard/NewProjectModal.tsx:42:  const preview = useMemo(
+pages/Dashboard/NewProjectModal.tsx:43:    () => (template === 'empty' ? '// Start typing your code…' : getTemplateContent(language, template)),
+pages/Dashboard/NewProjectModal.tsx:44:    [language, template],
+pages/Dashboard/NewProjectModal.tsx:45:  );
+pages/Dashboard/NewProjectModal.tsx:46:
+pages/Dashboard/NewProjectModal.tsx:47:  const submit = async (e: FormEvent) => {
+pages/Dashboard/NewProjectModal.tsx:48:    e.preventDefault();
+pages/Dashboard/NewProjectModal.tsx:49:    if (!name.trim()) {
+pages/Dashboard/NewProjectModal.tsx:50:      setError(t('new_project.name_required'));
+pages/Dashboard/NewProjectModal.tsx:51:      return;
+pages/Dashboard/NewProjectModal.tsx:52:    }
+pages/Dashboard/NewProjectModal.tsx:53:    setSubmitting(true);
+pages/Dashboard/NewProjectModal.tsx:54:    setError('');
+pages/Dashboard/NewProjectModal.tsx:55:    try {
+pages/Dashboard/NewProjectModal.tsx:56:      const projectResponse = await projectService.create({ name: name.trim(), description: description.trim() || undefined });
+pages/Dashboard/NewProjectModal.tsx:57:      const project = projectResponse.data;
+pages/Dashboard/NewProjectModal.tsx:58:      const content = getTemplateContent(language, template);
+pages/Dashboard/NewProjectModal.tsx:59:      try {
+pages/Dashboard/NewProjectModal.tsx:60:        await fileService.create(project.id, { filename, language, content });
+pages/Dashboard/NewProjectModal.tsx:61:      } catch {
+pages/Dashboard/NewProjectModal.tsx:62:        /* file creation is optional; keep project only */
+pages/Dashboard/NewProjectModal.tsx:63:      }
+pages/Dashboard/NewProjectModal.tsx:64:      toast.success(t('toast.project_created'), `${project.name}`);
+pages/Dashboard/NewProjectModal.tsx:65:      onClose();
+pages/Dashboard/NewProjectModal.tsx:66:      navigate(`/editor/${project.id}`);
+pages/Dashboard/NewProjectModal.tsx:67:    } catch (err: unknown) {
+pages/Dashboard/NewProjectModal.tsx:68:      setError(
+pages/Dashboard/NewProjectModal.tsx:69:        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+pages/Dashboard/NewProjectModal.tsx:70:          t('new_project.create_failed'),
+pages/Dashboard/NewProjectModal.tsx:71:      );
+pages/Dashboard/NewProjectModal.tsx:72:    } finally {
+pages/Dashboard/NewProjectModal.tsx:73:      setSubmitting(false);
+pages/Dashboard/NewProjectModal.tsx:74:    }
+pages/Dashboard/NewProjectModal.tsx:75:  };
+pages/Dashboard/NewProjectModal.tsx:76:
+pages/Dashboard/NewProjectModal.tsx:77:  return (
+pages/Dashboard/NewProjectModal.tsx:78:    <Modal
+pages/Dashboard/NewProjectModal.tsx:79:      open={open}
+pages/Dashboard/NewProjectModal.tsx:80:      onClose={onClose}
+pages/Dashboard/NewProjectModal.tsx:81:      title={t('new_project.title')}
+pages/Dashboard/NewProjectModal.tsx:82:      description={t('new_project.desc')}
+pages/Dashboard/NewProjectModal.tsx:83:      size="md"
+pages/Dashboard/NewProjectModal.tsx:84:    >
+pages/Dashboard/NewProjectModal.tsx:85:      <form onSubmit={submit} className="flex flex-col gap-5">
+pages/Dashboard/NewProjectModal.tsx:86:        <Input
+pages/Dashboard/NewProjectModal.tsx:87:          label={t('new_project.name_label')}
+pages/Dashboard/NewProjectModal.tsx:88:          value={name}
+pages/Dashboard/NewProjectModal.tsx:89:          onChange={(e) => {
+pages/Dashboard/NewProjectModal.tsx:90:            setName(e.target.value);
+pages/Dashboard/NewProjectModal.tsx:91:            setError('');
+pages/Dashboard/NewProjectModal.tsx:92:          }}
+pages/Dashboard/NewProjectModal.tsx:93:          placeholder={t('new_project.name_placeholder')}
+pages/Dashboard/NewProjectModal.tsx:94:          autoFocus
+pages/Dashboard/NewProjectModal.tsx:95:          error={error}
+pages/Dashboard/NewProjectModal.tsx:96:        />
+pages/Dashboard/NewProjectModal.tsx:97:        <Input
+pages/Dashboard/NewProjectModal.tsx:98:          label={t('new_project.desc_label')}
+pages/Dashboard/NewProjectModal.tsx:99:          value={description}
+pages/Dashboard/NewProjectModal.tsx:100:          onChange={(e) => setDescription(e.target.value)}
+pages/Dashboard/NewProjectModal.tsx:101:          placeholder={t('new_project.desc_placeholder')}
+pages/Dashboard/NewProjectModal.tsx:102:        />
+pages/Dashboard/NewProjectModal.tsx:103:
+pages/Dashboard/NewProjectModal.tsx:104:        <div>
+pages/Dashboard/NewProjectModal.tsx:105:          <p className="mb-1.5 text-[13px] font-medium text-ink">{t('new_project.lang_label')}</p>
+pages/Dashboard/NewProjectModal.tsx:106:          <div className="grid grid-cols-3 gap-2">
+pages/Dashboard/NewProjectModal.tsx:107:            {Object.entries(LANG_EXTS).map(([slug, info]) => {
+pages/Dashboard/NewProjectModal.tsx:108:              const active = language === slug;
+pages/Dashboard/NewProjectModal.tsx:109:              return (
+pages/Dashboard/NewProjectModal.tsx:110:                <button
+pages/Dashboard/NewProjectModal.tsx:111:                  key={slug}
+pages/Dashboard/NewProjectModal.tsx:112:                  type="button"
+pages/Dashboard/NewProjectModal.tsx:113:                  onClick={() => setLanguage(slug)}
+pages/Dashboard/NewProjectModal.tsx:114:                  className={cn(
+pages/Dashboard/NewProjectModal.tsx:115:                    'flex flex-col items-center gap-1.5 rounded-lg border px-2 py-2.5 text-xs font-medium transition-colors',
+pages/Dashboard/NewProjectModal.tsx:116:                    active
+pages/Dashboard/NewProjectModal.tsx:117:                      ? 'border-primary bg-primary/10 text-primary'
+pages/Dashboard/NewProjectModal.tsx:118:                      : 'border-edge bg-panel text-mute hover:border-edge-strong hover:text-ink',
+pages/Dashboard/NewProjectModal.tsx:119:                  )}
+pages/Dashboard/NewProjectModal.tsx:120:                >
+pages/Dashboard/NewProjectModal.tsx:121:                  <LanguageIcon lang={info.glyph} size="md" />
+pages/Dashboard/NewProjectModal.tsx:122:                  {slug === 'python' ? 'Python' : info.glyph === 'c' ? 'C' : 'C++'}
+pages/Dashboard/NewProjectModal.tsx:123:                </button>
+pages/Dashboard/NewProjectModal.tsx:124:              );
+pages/Dashboard/NewProjectModal.tsx:125:            })}
+pages/Dashboard/NewProjectModal.tsx:126:          </div>
+pages/Dashboard/NewProjectModal.tsx:127:        </div>
+pages/Dashboard/NewProjectModal.tsx:128:
+pages/Dashboard/NewProjectModal.tsx:129:        <div>
+pages/Dashboard/NewProjectModal.tsx:130:          <p className="mb-1.5 text-[13px] font-medium text-ink">{t('new_project.template_label')}</p>
+pages/Dashboard/NewProjectModal.tsx:131:          <div className="grid gap-2 sm:grid-cols-2">
+pages/Dashboard/NewProjectModal.tsx:132:            {TEMPLATES.map((tpl) => {
+pages/Dashboard/NewProjectModal.tsx:133:              const active = template === tpl.id;
+pages/Dashboard/NewProjectModal.tsx:134:              return (
+pages/Dashboard/NewProjectModal.tsx:135:                <button
+pages/Dashboard/NewProjectModal.tsx:136:                  key={tpl.id}
+pages/Dashboard/NewProjectModal.tsx:137:                  type="button"
+pages/Dashboard/NewProjectModal.tsx:138:                  onClick={() => setTemplate(tpl.id)}
+pages/Dashboard/NewProjectModal.tsx:139:                  className={cn(
+pages/Dashboard/NewProjectModal.tsx:140:                    'rounded-lg border px-3 py-2.5 text-left transition-colors',
+pages/Dashboard/NewProjectModal.tsx:141:                    active
+pages/Dashboard/NewProjectModal.tsx:142:                      ? 'border-primary/60 bg-primary/5'
+pages/Dashboard/NewProjectModal.tsx:143:                      : 'border-edge bg-panel hover:border-edge-strong',
+pages/Dashboard/NewProjectModal.tsx:144:                  )}
+pages/Dashboard/NewProjectModal.tsx:145:                >
+pages/Dashboard/NewProjectModal.tsx:146:                  <span className={cn('block text-[13px] font-medium', active ? 'text-primary' : 'text-ink')}>
+pages/Dashboard/NewProjectModal.tsx:147:                    {t(TEMPLATE_KEYS[tpl.id].label)}
+pages/Dashboard/NewProjectModal.tsx:148:                  </span>
+pages/Dashboard/NewProjectModal.tsx:149:                  <span className="mt-0.5 block text-[11px] text-mute">{t(TEMPLATE_KEYS[tpl.id].desc)}</span>
+pages/Dashboard/NewProjectModal.tsx:150:                </button>
+pages/Dashboard/NewProjectModal.tsx:151:              );
+pages/Dashboard/NewProjectModal.tsx:152:            })}
+pages/Dashboard/NewProjectModal.tsx:153:          </div>
+pages/Dashboard/NewProjectModal.tsx:154:        </div>
+pages/Dashboard/NewProjectModal.tsx:155:
+pages/Dashboard/NewProjectModal.tsx:156:        <div>
+pages/Dashboard/NewProjectModal.tsx:157:          <p className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium text-ink">
+pages/Dashboard/NewProjectModal.tsx:158:            <Icon name="code" size={14} className="text-faint" />
+pages/Dashboard/NewProjectModal.tsx:159:            {filename}
+pages/Dashboard/NewProjectModal.tsx:160:          </p>
+pages/Dashboard/NewProjectModal.tsx:161:          <pre className="max-h-28 overflow-hidden rounded-lg border border-edge bg-editor p-3 font-mono text-[11px] leading-relaxed text-mute">
+pages/Dashboard/NewProjectModal.tsx:162:            {preview}
+pages/Dashboard/NewProjectModal.tsx:163:          </pre>
+pages/Dashboard/NewProjectModal.tsx:164:        </div>
+pages/Dashboard/NewProjectModal.tsx:165:
+pages/Dashboard/NewProjectModal.tsx:166:        <div className="flex justify-end gap-2">
+pages/Dashboard/NewProjectModal.tsx:167:          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
+pages/Dashboard/NewProjectModal.tsx:168:            {t('new_project.cancel')}
+pages/Dashboard/NewProjectModal.tsx:169:          </Button>
+pages/Dashboard/NewProjectModal.tsx:170:          <Button type="submit" loading={submitting}>
+pages/Dashboard/NewProjectModal.tsx:171:            <Icon name="rocket" size={15} />
+pages/Dashboard/NewProjectModal.tsx:172:            {t('new_project.create')}
+pages/Dashboard/NewProjectModal.tsx:173:          </Button>
+pages/Dashboard/NewProjectModal.tsx:174:        </div>
+pages/Dashboard/NewProjectModal.tsx:175:      </form>
+pages/Dashboard/NewProjectModal.tsx:176:    </Modal>
+pages/Dashboard/NewProjectModal.tsx:177:  );
+pages/Dashboard/NewProjectModal.tsx:178:}
+components/Editor/EditorTopBar.tsx:1:import { useNavigate } from 'react-router-dom';
+components/Editor/EditorTopBar.tsx:2:import { cn } from '../../lib/cn';
+components/Editor/EditorTopBar.tsx:3:import { Icon } from '../ui/Icon';
+components/Editor/EditorTopBar.tsx:4:import { Button } from '../ui/Button';
+components/Editor/EditorTopBar.tsx:5:import { Tooltip } from '../ui/Tooltip';
+components/Editor/EditorTopBar.tsx:6:import { LanguageIcon } from '../LanguageIcon';
+components/Editor/EditorTopBar.tsx:7:import { iconForFile } from '../../lib/languages';
+components/Editor/EditorTopBar.tsx:8:import { useI18n } from '../../i18n';
+components/Editor/EditorTopBar.tsx:9:import logoUrl from '../../assets/logo.png';
+components/Editor/EditorTopBar.tsx:10:
+components/Editor/EditorTopBar.tsx:11:interface EditorTopBarProps {
+components/Editor/EditorTopBar.tsx:12:  projectName: string | null;
+components/Editor/EditorTopBar.tsx:13:  fileName?: string;
+components/Editor/EditorTopBar.tsx:14:  isSaving: boolean;
+components/Editor/EditorTopBar.tsx:15:  dirty: boolean;
+components/Editor/EditorTopBar.tsx:16:  running: boolean;
+components/Editor/EditorTopBar.tsx:17:  canRun: boolean;
+components/Editor/EditorTopBar.tsx:18:  onSave: () => void;
+components/Editor/EditorTopBar.tsx:19:  onRun: () => void;
+components/Editor/EditorTopBar.tsx:20:  onStop: () => void;
+components/Editor/EditorTopBar.tsx:21:  onShare: () => void;
+components/Editor/EditorTopBar.tsx:22:  onDownload: () => void;
+components/Editor/EditorTopBar.tsx:23:  onToggleSidebar: () => void;
+components/Editor/EditorTopBar.tsx:24:  sidebarVisible: boolean;
+components/Editor/EditorTopBar.tsx:25:}
+components/Editor/EditorTopBar.tsx:26:
+components/Editor/EditorTopBar.tsx:27:export function EditorTopBar({
+components/Editor/EditorTopBar.tsx:28:  projectName,
+components/Editor/EditorTopBar.tsx:29:  fileName,
+components/Editor/EditorTopBar.tsx:30:  isSaving,
+components/Editor/EditorTopBar.tsx:31:  dirty,
+components/Editor/EditorTopBar.tsx:32:  running,
+components/Editor/EditorTopBar.tsx:33:  canRun,
+components/Editor/EditorTopBar.tsx:34:  onSave,
+components/Editor/EditorTopBar.tsx:35:  onRun,
+components/Editor/EditorTopBar.tsx:36:  onStop,
+components/Editor/EditorTopBar.tsx:37:  onShare,
+components/Editor/EditorTopBar.tsx:38:  onDownload,
+components/Editor/EditorTopBar.tsx:39:  onToggleSidebar,
+components/Editor/EditorTopBar.tsx:40:  sidebarVisible,
+components/Editor/EditorTopBar.tsx:41:}: EditorTopBarProps) {
+components/Editor/EditorTopBar.tsx:42:  const navigate = useNavigate();
+components/Editor/EditorTopBar.tsx:43:  const { t } = useI18n();
+components/Editor/EditorTopBar.tsx:44:
+components/Editor/EditorTopBar.tsx:45:  return (
+components/Editor/EditorTopBar.tsx:46:    <header className="flex h-[calc(3rem+env(safe-area-inset-top))] shrink-0 items-center gap-2 border-b border-edge bg-page/85 px-2 pt-[env(safe-area-inset-top)] backdrop-blur-md sm:px-3">
+components/Editor/EditorTopBar.tsx:47:      <div className="flex min-w-0 items-center gap-1">
+components/Editor/EditorTopBar.tsx:48:        <Tooltip label={t('editor.back_dashboard')} side="bottom">
+components/Editor/EditorTopBar.tsx:49:          <Button
+components/Editor/EditorTopBar.tsx:50:            variant="ghost"
+components/Editor/EditorTopBar.tsx:51:            size="icon"
+components/Editor/EditorTopBar.tsx:52:            className="shrink-0 rounded-lg"
+components/Editor/EditorTopBar.tsx:53:            onClick={() => navigate('/dashboard')}
+components/Editor/EditorTopBar.tsx:54:            aria-label={t('editor.back_dashboard')}
+components/Editor/EditorTopBar.tsx:55:          >
+components/Editor/EditorTopBar.tsx:56:            <Icon name="arrowLeft" size={17} />
+components/Editor/EditorTopBar.tsx:57:          </Button>
+components/Editor/EditorTopBar.tsx:58:        </Tooltip>
+components/Editor/EditorTopBar.tsx:59:
+components/Editor/EditorTopBar.tsx:60:        <Tooltip label={t('editor.toggle_explorer_shortcut')} side="bottom">
+components/Editor/EditorTopBar.tsx:61:          <button
+components/Editor/EditorTopBar.tsx:62:            onClick={onToggleSidebar}
+components/Editor/EditorTopBar.tsx:63:            className={cn(
+components/Editor/EditorTopBar.tsx:64:              'hidden rounded-lg p-2 transition-colors lg:block',
+components/Editor/EditorTopBar.tsx:65:              sidebarVisible ? 'bg-raised text-ink' : 'text-mute hover:bg-raised hover:text-ink',
+components/Editor/EditorTopBar.tsx:66:            )}
+components/Editor/EditorTopBar.tsx:67:            aria-label={t('editor.toggle_explorer')}
+components/Editor/EditorTopBar.tsx:68:            title={t('editor.toggle_explorer_shortcut')}
+components/Editor/EditorTopBar.tsx:69:          >
+components/Editor/EditorTopBar.tsx:70:            <Icon name="panelLeft" size={17} />
+components/Editor/EditorTopBar.tsx:71:          </button>
+components/Editor/EditorTopBar.tsx:72:        </Tooltip>
+components/Editor/EditorTopBar.tsx:73:
+components/Editor/EditorTopBar.tsx:74:        {/* Brand plate */}
+components/Editor/EditorTopBar.tsx:75:        <img
+components/Editor/EditorTopBar.tsx:76:          src={logoUrl}
+components/Editor/EditorTopBar.tsx:77:          alt=""
+components/Editor/EditorTopBar.tsx:78:          className="cr-brand-plate ml-0.5 h-7 w-7 shrink-0 rounded-lg object-contain"
+components/Editor/EditorTopBar.tsx:79:          aria-hidden="true"
+components/Editor/EditorTopBar.tsx:80:        />
+components/Editor/EditorTopBar.tsx:81:
+components/Editor/EditorTopBar.tsx:82:        {/* Breadcrumb — desktop & tablet */}
+components/Editor/EditorTopBar.tsx:83:        <div className="ml-2 hidden min-w-0 sm:block">
+components/Editor/EditorTopBar.tsx:84:          <p className="flex items-center gap-1.5 text-sm font-semibold leading-tight text-ink">
+components/Editor/EditorTopBar.tsx:85:            <span className="truncate">{projectName ?? t('editor.project_fallback')}</span>
+components/Editor/EditorTopBar.tsx:86:            {fileName && (
+components/Editor/EditorTopBar.tsx:87:              <>
+components/Editor/EditorTopBar.tsx:88:                <Icon name="chevronRight" size={11} className="shrink-0 text-faint" />
+components/Editor/EditorTopBar.tsx:89:                <span className="flex min-w-0 items-center gap-1.5">
+components/Editor/EditorTopBar.tsx:90:                  <LanguageIcon lang={iconForFile(fileName)} size="sm" />
+components/Editor/EditorTopBar.tsx:91:                  <span className="truncate font-mono text-[13px] font-normal text-mute">{fileName}</span>
+components/Editor/EditorTopBar.tsx:92:                </span>
+components/Editor/EditorTopBar.tsx:93:              </>
+components/Editor/EditorTopBar.tsx:94:            )}
+components/Editor/EditorTopBar.tsx:95:          </p>
+components/Editor/EditorTopBar.tsx:96:          <p className="mt-0.5 flex items-center text-[10.5px] leading-none">
+components/Editor/EditorTopBar.tsx:97:            {isSaving ? (
+components/Editor/EditorTopBar.tsx:98:              <span className="inline-flex items-center gap-1.5 font-medium text-info">
+components/Editor/EditorTopBar.tsx:99:                <span className="h-2.5 w-2.5 animate-spin rounded-full border-[2px] border-info border-t-transparent" />
+components/Editor/EditorTopBar.tsx:100:                {t('editor.saving')}
+components/Editor/EditorTopBar.tsx:101:              </span>
+components/Editor/EditorTopBar.tsx:102:            ) : dirty ? (
+components/Editor/EditorTopBar.tsx:103:              <span className="inline-flex items-center gap-1.5 font-medium text-warning">
+components/Editor/EditorTopBar.tsx:104:                <span className="h-1.5 w-1.5 rounded-full bg-warning shadow-[0_0_6px_-1px_currentColor]" />
+components/Editor/EditorTopBar.tsx:105:                {t('editor.unsaved_changes')}
+components/Editor/EditorTopBar.tsx:106:              </span>
+components/Editor/EditorTopBar.tsx:107:            ) : (
+components/Editor/EditorTopBar.tsx:108:              <span className="inline-flex items-center gap-1.5 font-medium text-mute">
+components/Editor/EditorTopBar.tsx:109:                <span className="h-1.5 w-1.5 rounded-full bg-success" />
+components/Editor/EditorTopBar.tsx:110:                {t('editor.all_saved')}
+components/Editor/EditorTopBar.tsx:111:              </span>
+components/Editor/EditorTopBar.tsx:112:            )}
+components/Editor/EditorTopBar.tsx:113:          </p>
+components/Editor/EditorTopBar.tsx:114:        </div>
+components/Editor/EditorTopBar.tsx:115:
+components/Editor/EditorTopBar.tsx:116:        {/* Mobile — name only */}
+components/Editor/EditorTopBar.tsx:117:        <div className="min-w-0 sm:hidden">
+components/Editor/EditorTopBar.tsx:118:          <p className="truncate text-sm font-semibold text-ink">{projectName ?? t('editor.project_fallback')}</p>
+components/Editor/EditorTopBar.tsx:119:          {running ? (
+components/Editor/EditorTopBar.tsx:120:            <p className="flex items-center gap-1 truncate font-mono text-[11px] font-medium text-primary">
+components/Editor/EditorTopBar.tsx:121:              <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary" />
+components/Editor/EditorTopBar.tsx:122:              {t('statusbar.running')}
+components/Editor/EditorTopBar.tsx:123:            </p>
+components/Editor/EditorTopBar.tsx:124:          ) : isSaving ? (
+components/Editor/EditorTopBar.tsx:125:            <p className="flex items-center gap-1 truncate font-mono text-[11px] font-medium text-info">
+components/Editor/EditorTopBar.tsx:126:              <span className="h-2 w-2 shrink-0 animate-spin rounded-full border-[1.5px] border-info border-t-transparent" />
+components/Editor/EditorTopBar.tsx:127:              {t('editor.saving')}
+components/Editor/EditorTopBar.tsx:128:            </p>
+components/Editor/EditorTopBar.tsx:129:          ) : dirty ? (
+components/Editor/EditorTopBar.tsx:130:            <p className="flex items-center gap-1 truncate font-mono text-[11px] text-warning">
+components/Editor/EditorTopBar.tsx:131:              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />
+components/Editor/EditorTopBar.tsx:132:              {t('editor.unsaved_changes')}
+components/Editor/EditorTopBar.tsx:133:            </p>
+components/Editor/EditorTopBar.tsx:134:          ) : (
+components/Editor/EditorTopBar.tsx:135:            fileName && <p className="truncate font-mono text-[11px] text-mute">{fileName}</p>
+components/Editor/EditorTopBar.tsx:136:          )}
+components/Editor/EditorTopBar.tsx:137:        </div>
+components/Editor/EditorTopBar.tsx:138:      </div>
+components/Editor/EditorTopBar.tsx:139:
+components/Editor/EditorTopBar.tsx:140:      <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
+components/Editor/EditorTopBar.tsx:141:        <Tooltip label={t('editor.download_file')} side="bottom">
+components/Editor/EditorTopBar.tsx:142:          <Button variant="ghost" size="icon" onClick={onDownload} disabled={!canRun} className="hidden lg:inline-flex" aria-label={t('editor.download_file')}>
+components/Editor/EditorTopBar.tsx:143:            <Icon name="download" size={16} />
+components/Editor/EditorTopBar.tsx:144:          </Button>
+components/Editor/EditorTopBar.tsx:145:        </Tooltip>
+components/Editor/EditorTopBar.tsx:146:
+components/Editor/EditorTopBar.tsx:147:        <Tooltip label={t('editor.share')} side="bottom">
+components/Editor/EditorTopBar.tsx:148:          <Button variant="ghost" size="icon" onClick={onShare} disabled={!canRun} className="hidden lg:inline-flex" aria-label={t('editor.share_file')}>
+components/Editor/EditorTopBar.tsx:149:            <Icon name="share" size={16} />
+components/Editor/EditorTopBar.tsx:150:          </Button>
+components/Editor/EditorTopBar.tsx:151:        </Tooltip>
+components/Editor/EditorTopBar.tsx:152:
+components/Editor/EditorTopBar.tsx:153:        <Tooltip label={t('nav.settings')} side="bottom">
+components/Editor/EditorTopBar.tsx:154:          <Button
+components/Editor/EditorTopBar.tsx:155:            variant="ghost"
+components/Editor/EditorTopBar.tsx:156:            size="icon"
+components/Editor/EditorTopBar.tsx:157:            onClick={() => navigate('/settings')}
+components/Editor/EditorTopBar.tsx:158:            className="hidden lg:inline-flex"
+components/Editor/EditorTopBar.tsx:159:            aria-label={t('nav.settings')}
+components/Editor/EditorTopBar.tsx:160:          >
+components/Editor/EditorTopBar.tsx:161:            <Icon name="settings" size={16} />
+components/Editor/EditorTopBar.tsx:162:          </Button>
+components/Editor/EditorTopBar.tsx:163:        </Tooltip>
+components/Editor/EditorTopBar.tsx:164:
+components/Editor/EditorTopBar.tsx:165:        <Tooltip label={t('editor.save_shortcut')} side="bottom">
+components/Editor/EditorTopBar.tsx:166:          <Button variant="secondary" size="sm" onClick={onSave} disabled={!canRun || isSaving} className="hidden lg:inline-flex">
+components/Editor/EditorTopBar.tsx:167:            <Icon name="save" size={15} />
+components/Editor/EditorTopBar.tsx:168:            {isSaving ? t('editor.saving') : t('editor.save')}
+components/Editor/EditorTopBar.tsx:169:          </Button>
+components/Editor/EditorTopBar.tsx:170:        </Tooltip>
+components/Editor/EditorTopBar.tsx:171:
+components/Editor/EditorTopBar.tsx:172:        <Button
+components/Editor/EditorTopBar.tsx:173:          variant="primary"
+components/Editor/EditorTopBar.tsx:174:          size="sm"
+components/Editor/EditorTopBar.tsx:175:          onClick={onRun}
+components/Editor/EditorTopBar.tsx:176:          disabled={running || !canRun}
+components/Editor/EditorTopBar.tsx:177:          loading={running}
+components/Editor/EditorTopBar.tsx:178:          title={t('editor.run_shortcut')}
+components/Editor/EditorTopBar.tsx:179:          className="cr-btn-run min-w-0 shrink-0 px-2.5 font-semibold md:min-w-[5.5rem] md:px-4"
+components/Editor/EditorTopBar.tsx:180:        >
+components/Editor/EditorTopBar.tsx:181:          <Icon name="play" size={15} className="fill-current" />
+components/Editor/EditorTopBar.tsx:182:          <span className="ml-1.5 hidden md:inline">{t('editor.run')}</span>
+components/Editor/EditorTopBar.tsx:183:        </Button>
+components/Editor/EditorTopBar.tsx:184:
+components/Editor/EditorTopBar.tsx:185:        <Button
+components/Editor/EditorTopBar.tsx:186:          variant="danger"
+components/Editor/EditorTopBar.tsx:187:          size="sm"
+components/Editor/EditorTopBar.tsx:188:          onClick={onStop}
+components/Editor/EditorTopBar.tsx:189:          disabled={!running}
+components/Editor/EditorTopBar.tsx:190:          title={t('editor.stop_program')}
+components/Editor/EditorTopBar.tsx:191:          aria-label={t('editor.stop_program')}
+components/Editor/EditorTopBar.tsx:192:          className="min-w-0 shrink-0 px-2.5 font-semibold md:min-w-[4.5rem] md:px-4"
+components/Editor/EditorTopBar.tsx:193:        >
+components/Editor/EditorTopBar.tsx:194:          <Icon name="stop" size={15} />
+components/Editor/EditorTopBar.tsx:195:          {running && (
+components/Editor/EditorTopBar.tsx:196:            <span className="relative hidden h-2 w-2 md:flex">
+components/Editor/EditorTopBar.tsx:197:              <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-current" />
+components/Editor/EditorTopBar.tsx:198:            </span>
+components/Editor/EditorTopBar.tsx:199:          )}
+components/Editor/EditorTopBar.tsx:200:          <span className="ml-1.5 hidden md:inline">{t('editor.stop')}</span>
+components/Editor/EditorTopBar.tsx:201:        </Button>
+components/Editor/EditorTopBar.tsx:202:      </div>
+components/Editor/EditorTopBar.tsx:203:    </header>
+components/Editor/EditorTopBar.tsx:204:  );
+components/Editor/EditorTopBar.tsx:205:}
+components/Editor/EditorTabs.tsx:1:import { cn } from '../../lib/cn';
+components/Editor/EditorTabs.tsx:2:import { Icon } from '../ui/Icon';
+components/Editor/EditorTabs.tsx:3:import { LanguageIcon } from '../LanguageIcon';
+components/Editor/EditorTabs.tsx:4:import { useI18n } from '../../i18n';
+components/Editor/EditorTabs.tsx:5:import type { File } from '../../types';
+components/Editor/EditorTabs.tsx:6:import { iconForFile } from '../../lib/languages';
+components/Editor/EditorTabs.tsx:7:
+components/Editor/EditorTabs.tsx:8:interface EditorTabsProps {
+components/Editor/EditorTabs.tsx:9:  files: File[];
+components/Editor/EditorTabs.tsx:10:  activeFileId: number | null;
+components/Editor/EditorTabs.tsx:11:  dirtyIds: Set<number>;
+components/Editor/EditorTabs.tsx:12:  onSelect: (file: File) => void;
+components/Editor/EditorTabs.tsx:13:  onCloseTab: (file: File) => void;
+components/Editor/EditorTabs.tsx:14:}
+components/Editor/EditorTabs.tsx:15:
+components/Editor/EditorTabs.tsx:16:export function EditorTabs({ files, activeFileId, dirtyIds, onSelect, onCloseTab }: EditorTabsProps) {
+components/Editor/EditorTabs.tsx:17:  const { t } = useI18n();
+components/Editor/EditorTabs.tsx:18:  if (files.length === 0) return null;
+components/Editor/EditorTabs.tsx:19:
+components/Editor/EditorTabs.tsx:20:  return (
+components/Editor/EditorTabs.tsx:21:    <div className="flex h-10 shrink-0 items-stretch overflow-x-auto border-b border-edge bg-raised/40 no-scrollbar">
+components/Editor/EditorTabs.tsx:22:      {files.map((file) => {
+components/Editor/EditorTabs.tsx:23:        const active = file.id === activeFileId;
+components/Editor/EditorTabs.tsx:24:        const dirty = dirtyIds.has(file.id);
+components/Editor/EditorTabs.tsx:25:        return (
+components/Editor/EditorTabs.tsx:26:          <div
+components/Editor/EditorTabs.tsx:27:            key={file.id}
+components/Editor/EditorTabs.tsx:28:            role="tab"
+components/Editor/EditorTabs.tsx:29:            aria-selected={active}
+components/Editor/EditorTabs.tsx:30:            onClick={() => onSelect(file)}
+components/Editor/EditorTabs.tsx:31:            className={cn(
+components/Editor/EditorTabs.tsx:32:              'group relative flex max-w-44 shrink-0 cursor-pointer items-center gap-2 border-r border-edge/70 px-3.5 text-[13px] font-medium transition-colors',
+components/Editor/EditorTabs.tsx:33:              active
+components/Editor/EditorTabs.tsx:34:                ? 'bg-editor text-ink shadow-[inset_0_2px_0_0_var(--primary)]'
+components/Editor/EditorTabs.tsx:35:                : 'text-mute hover:bg-editor/60 hover:text-ink',
+components/Editor/EditorTabs.tsx:36:            )}
+components/Editor/EditorTabs.tsx:37:          >
+components/Editor/EditorTabs.tsx:38:            <LanguageIcon lang={iconForFile(file.filename)} size="sm" />
+components/Editor/EditorTabs.tsx:39:            <span className="truncate">{file.filename}</span>
+components/Editor/EditorTabs.tsx:40:            <button
+components/Editor/EditorTabs.tsx:41:              onClick={(e) => {
+components/Editor/EditorTabs.tsx:42:                e.stopPropagation();
+components/Editor/EditorTabs.tsx:43:                onCloseTab(file);
+components/Editor/EditorTabs.tsx:44:              }}
+components/Editor/EditorTabs.tsx:45:              className={cn(
+components/Editor/EditorTabs.tsx:46:                'ml-0.5 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded text-faint transition-colors hover:bg-mute/15 hover:text-ink',
+components/Editor/EditorTabs.tsx:47:                !active && 'lg:opacity-0 lg:group-hover:opacity-100',
+components/Editor/EditorTabs.tsx:48:              )}
+components/Editor/EditorTabs.tsx:49:              aria-label={t('editor.close_tab', { name: file.filename })}
+components/Editor/EditorTabs.tsx:50:            >
+components/Editor/EditorTabs.tsx:51:              {dirty ? (
+components/Editor/EditorTabs.tsx:52:                <span className="block h-2 w-2 rounded-full bg-primary" title={t('editor.unsaved_changes')} />
+components/Editor/EditorTabs.tsx:53:              ) : (
+components/Editor/EditorTabs.tsx:54:                <Icon name="x" size={13} />
+components/Editor/EditorTabs.tsx:55:              )}
+components/Editor/EditorTabs.tsx:56:            </button>
+components/Editor/EditorTabs.tsx:57:            {active && (
+components/Editor/EditorTabs.tsx:58:              <span className="absolute inset-x-0 bottom-0 h-px bg-edge" aria-hidden="true" />
+components/Editor/EditorTabs.tsx:59:            )}
+components/Editor/EditorTabs.tsx:60:          </div>
+components/Editor/EditorTabs.tsx:61:        );
+components/Editor/EditorTabs.tsx:62:      })}
+components/Editor/EditorTabs.tsx:63:    </div>
+components/Editor/EditorTabs.tsx:64:  );
+components/Editor/EditorTabs.tsx:65:}
+components/Editor/StatusBar.tsx:1:import { useOnline } from '../../hooks/useOnline';
+components/Editor/StatusBar.tsx:2:import { useTheme } from '../../context/ThemeContext';
+components/Editor/StatusBar.tsx:3:import { usePreferences } from '../../context/PreferencesContext';
+components/Editor/StatusBar.tsx:4:import { Icon } from '../ui/Icon';
+components/Editor/StatusBar.tsx:5:import { LanguageIcon, type LangGlyph } from '../LanguageIcon';
+components/Editor/StatusBar.tsx:6:import LanguageSelector from '../LanguageSelector/LanguageSelector';
+components/Editor/StatusBar.tsx:7:import { cn } from '../../lib/cn';
+components/Editor/StatusBar.tsx:8:import type { Language } from '../../types';
+components/Editor/StatusBar.tsx:9:import { useI18n } from '../../i18n';
+components/Editor/StatusBar.tsx:10:
+components/Editor/StatusBar.tsx:11:function glyphForSlug(slug: string): LangGlyph {
+components/Editor/StatusBar.tsx:12:  return slug === 'python' ? 'python' : slug === 'c' ? 'c' : 'cpp';
+components/Editor/StatusBar.tsx:13:}
+components/Editor/StatusBar.tsx:14:
+components/Editor/StatusBar.tsx:15:export function StatusBar({
+components/Editor/StatusBar.tsx:16:  languages,
+components/Editor/StatusBar.tsx:17:  selectedLanguage,
+components/Editor/StatusBar.tsx:18:  onLanguageChange,
+components/Editor/StatusBar.tsx:19:  fileCount,
+components/Editor/StatusBar.tsx:20:  fileName,
+components/Editor/StatusBar.tsx:21:  running,
+components/Editor/StatusBar.tsx:22:  cursorLine,
+components/Editor/StatusBar.tsx:23:  cursorColumn,
+components/Editor/StatusBar.tsx:24:}: {
+components/Editor/StatusBar.tsx:25:  languages: Language[];
+components/Editor/StatusBar.tsx:26:  selectedLanguage: string;
+components/Editor/StatusBar.tsx:27:  onLanguageChange: (slug: string) => void;
+components/Editor/StatusBar.tsx:28:  fileCount: number;
+components/Editor/StatusBar.tsx:29:  fileName?: string;
+components/Editor/StatusBar.tsx:30:  running: boolean;
+components/Editor/StatusBar.tsx:31:  cursorLine: number;
+components/Editor/StatusBar.tsx:32:  cursorColumn: number;
+components/Editor/StatusBar.tsx:33:}) {
+components/Editor/StatusBar.tsx:34:  const online = useOnline();
+components/Editor/StatusBar.tsx:35:  const { theme, toggle } = useTheme();
+components/Editor/StatusBar.tsx:36:  const { prefs } = usePreferences();
+components/Editor/StatusBar.tsx:37:  const { t } = useI18n();
+components/Editor/StatusBar.tsx:38:  const meta = languages.find((l) => l.slug === selectedLanguage);
+components/Editor/StatusBar.tsx:39:
+components/Editor/StatusBar.tsx:40:  return (
+components/Editor/StatusBar.tsx:41:    <footer className="flex h-8 shrink-0 items-center gap-3 border-t border-edge bg-panel px-3 text-[11px] text-mute">
+components/Editor/StatusBar.tsx:42:      <div className="flex min-w-0 items-center gap-2.5">
+components/Editor/StatusBar.tsx:43:        <LanguageSelector
+components/Editor/StatusBar.tsx:44:          languages={languages}
+components/Editor/StatusBar.tsx:45:          selected={selectedLanguage}
+components/Editor/StatusBar.tsx:46:          onChange={onLanguageChange}
+components/Editor/StatusBar.tsx:47:          compact
+components/Editor/StatusBar.tsx:48:        />
+components/Editor/StatusBar.tsx:49:        <span className="h-3 w-px shrink-0 bg-edge" />
+components/Editor/StatusBar.tsx:50:        <span className="inline-flex items-center gap-1.5 font-medium capitalize text-ink/75">
+components/Editor/StatusBar.tsx:51:          <LanguageIcon lang={glyphForSlug(selectedLanguage)} size="sm" />
+components/Editor/StatusBar.tsx:52:          {meta?.name ?? selectedLanguage}
+components/Editor/StatusBar.tsx:53:        </span>
+components/Editor/StatusBar.tsx:54:        {fileName && <span className="hidden truncate font-mono md:inline">{fileName}</span>}
+components/Editor/StatusBar.tsx:55:        <span className="hidden items-center gap-1.5 lg:inline-flex">
+components/Editor/StatusBar.tsx:56:          <Icon name="file" size={12} className="text-faint" />
+components/Editor/StatusBar.tsx:57:          {fileCount} {fileCount === 1 ? t('dashboard.file') : t('dashboard.files_suffix')}
+components/Editor/StatusBar.tsx:58:        </span>
+components/Editor/StatusBar.tsx:59:      </div>
+components/Editor/StatusBar.tsx:60:
+components/Editor/StatusBar.tsx:61:      <div className="ml-auto flex min-w-0 items-center gap-2.5">
+components/Editor/StatusBar.tsx:62:        {/* Editor state — only when a file is open. */}
+components/Editor/StatusBar.tsx:63:        {fileName && (
+components/Editor/StatusBar.tsx:64:          <>
+components/Editor/StatusBar.tsx:65:            <span className="hidden items-center gap-1.5 sm:inline-flex" title={t('statusbar.utf8')}>
+components/Editor/StatusBar.tsx:66:              <Icon name="globe" size={12} className="text-faint" />
+components/Editor/StatusBar.tsx:67:              {t('statusbar.utf8')}
+components/Editor/StatusBar.tsx:68:            </span>
+components/Editor/StatusBar.tsx:69:            <span className="hidden items-center gap-1.5 sm:inline-flex" title={t('statusbar.indentation')}>
+components/Editor/StatusBar.tsx:70:              <Icon name="minus" size={12} className="text-faint" />
+components/Editor/StatusBar.tsx:71:              {t('statusbar.spaces', { n: prefs.tabSize })}
+components/Editor/StatusBar.tsx:72:            </span>
+components/Editor/StatusBar.tsx:73:            <span
+components/Editor/StatusBar.tsx:74:              className="inline-flex items-center gap-1.5 tabular-nums"
+components/Editor/StatusBar.tsx:75:            >
+components/Editor/StatusBar.tsx:76:              <Icon name="cursor" size={12} className="text-faint" />
+components/Editor/StatusBar.tsx:77:              {t('statusbar.ln_col', { ln: cursorLine, col: cursorColumn })}
+components/Editor/StatusBar.tsx:78:            </span>
+components/Editor/StatusBar.tsx:79:          </>
+components/Editor/StatusBar.tsx:80:        )}
+components/Editor/StatusBar.tsx:81:
+components/Editor/StatusBar.tsx:82:        <span className="h-3 w-px shrink-0 bg-edge" />
+components/Editor/StatusBar.tsx:83:
+components/Editor/StatusBar.tsx:84:        <span
+components/Editor/StatusBar.tsx:85:          className={cn(
+components/Editor/StatusBar.tsx:86:            'inline-flex items-center gap-1.5',
+components/Editor/StatusBar.tsx:87:            running ? 'font-medium text-info' : 'text-mute',
+components/Editor/StatusBar.tsx:88:          )}
+components/Editor/StatusBar.tsx:89:          aria-live="polite"
+components/Editor/StatusBar.tsx:90:        >
+components/Editor/StatusBar.tsx:91:          <span className={cn('relative flex h-2 w-2', running && 'text-info')}>
+components/Editor/StatusBar.tsx:92:            <span
+components/Editor/StatusBar.tsx:93:              className={cn(
+components/Editor/StatusBar.tsx:94:                'inline-flex h-2 w-2 rounded-full',
+components/Editor/StatusBar.tsx:95:                running ? 'animate-pulse bg-info' : 'bg-success',
+components/Editor/StatusBar.tsx:96:              )}
+components/Editor/StatusBar.tsx:97:            />
+components/Editor/StatusBar.tsx:98:          </span>
+components/Editor/StatusBar.tsx:99:          {running ? t('statusbar.running') : t('statusbar.ready')}
+components/Editor/StatusBar.tsx:100:        </span>
+components/Editor/StatusBar.tsx:101:        <span className="h-3 w-px shrink-0 bg-edge" />
+components/Editor/StatusBar.tsx:102:        <span className="inline-flex items-center gap-1.5">
+components/Editor/StatusBar.tsx:103:          <span
+components/Editor/StatusBar.tsx:104:            className={cn(
+components/Editor/StatusBar.tsx:105:              'relative flex h-2 w-2',
+components/Editor/StatusBar.tsx:106:              online && 'text-success',
+components/Editor/StatusBar.tsx:107:              !online && 'text-warning',
+components/Editor/StatusBar.tsx:108:            )}
+components/Editor/StatusBar.tsx:109:          >
+components/Editor/StatusBar.tsx:110:            <span
+components/Editor/StatusBar.tsx:111:              className={cn(
+components/Editor/StatusBar.tsx:112:                'inline-flex h-2 w-2 rounded-full',
+components/Editor/StatusBar.tsx:113:                online ? 'bg-success' : 'bg-warning',
+components/Editor/StatusBar.tsx:114:                !online && 'animate-pulse',
+components/Editor/StatusBar.tsx:115:              )}
+components/Editor/StatusBar.tsx:116:            />
+components/Editor/StatusBar.tsx:117:          </span>
+components/Editor/StatusBar.tsx:118:          {online ? t('general.online') : t('general.offline')}
+components/Editor/StatusBar.tsx:119:        </span>
+components/Editor/StatusBar.tsx:120:        <button
+components/Editor/StatusBar.tsx:121:          onClick={toggle}
+components/Editor/StatusBar.tsx:122:          className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 transition-colors hover:bg-raised hover:text-ink"
+components/Editor/StatusBar.tsx:123:          aria-label={t('nav.theme_toggle')}
+components/Editor/StatusBar.tsx:124:          title={t('nav.theme_toggle')}
+components/Editor/StatusBar.tsx:125:        >
+components/Editor/StatusBar.tsx:126:          <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={12} />
+components/Editor/StatusBar.tsx:127:          <span className="hidden capitalize sm:inline">{theme}</span>
+components/Editor/StatusBar.tsx:128:        </button>
+components/Editor/StatusBar.tsx:129:      </div>
+components/Editor/StatusBar.tsx:130:    </footer>
+components/Editor/StatusBar.tsx:131:  );
+components/Editor/StatusBar.tsx:132:}

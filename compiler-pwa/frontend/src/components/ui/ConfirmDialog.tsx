@@ -1,6 +1,7 @@
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { Icon } from './Icon';
+import { useI18n } from '../../i18n';
 
 export function ConfirmDialog({
   open,
@@ -8,7 +9,7 @@ export function ConfirmDialog({
   onConfirm,
   title,
   message,
-  confirmLabel = 'Delete',
+  confirmLabel,
   danger = true,
   loading = false,
 }: {
@@ -21,6 +22,7 @@ export function ConfirmDialog({
   danger?: boolean;
   loading?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <Modal open={open} onClose={onClose} size="sm" hideClose>
       <div className="flex items-start gap-4">
@@ -38,10 +40,10 @@ export function ConfirmDialog({
       </div>
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="secondary" onClick={onClose} disabled={loading}>
-          Cancel
+          {t('dialog.cancel')}
         </Button>
         <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>
-          {confirmLabel}
+          {confirmLabel ?? t('dialog.delete')}
         </Button>
       </div>
     </Modal>

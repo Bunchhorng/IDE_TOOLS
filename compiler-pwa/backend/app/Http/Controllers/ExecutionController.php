@@ -137,6 +137,24 @@ class ExecutionController extends Controller
         ]);
     }
 
+    public function destroyAll(): JsonResponse
+    {
+        $user = auth()->user();
+
+        // Stop any live interactive sandboxes before clearing the history.
+        $user->executions()->where('interactive', true)->get()->each(function (Execution $execution) {
+            $this->dockerService->stopInteractive($execution->id);
+        });
+
+        $deleted = $user->executions()->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Execution history cleared successfully',
+            'data' => ['deleted' => $deleted],
+        ]);
+    }
+
     /** Start the sandbox container for a queued interactive execution. */
     public function startInteractive(Execution $execution): JsonResponse
     {
@@ -161,20 +179,26 @@ class ExecutionController extends Controller
         ]);
     }
 
-    /** Forward one line of input to the running program, or stop the session. */
+    /** Forward raw terminal bytes (or legacy line input), resize the PTY, or stop the session. */
     public function provideInput(Execution $execution, Request $request): JsonResponse
     {
         $this->authorize('view', $execution);
 
         $request->validate([
             'line' => ['nullable', 'string', 'max:1000000'],
+            'chunk' => ['nullable', 'string', 'max:1400000'],
+            'rows' => ['nullable', 'integer', 'between:1,1000'],
+            'cols' => ['nullable', 'integer', 'between:1,5000'],
             'close' => ['sometimes', 'boolean'],
         ]);
 
         $result = $this->dockerService->provideInput(
             $execution,
             $request->input('line'),
+            $request->input('chunk'),
             $request->boolean('close', false),
+            $request->integer('rows', 0),
+            $request->integer('cols', 0),
         );
         $this->service->applyInteractiveResult($execution, $result);
 
@@ -196,6 +220,25 @@ class ExecutionController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Interactive session polled',
+            'data' => new ExecutionResource($execution),
+        ]);
+    }
+
+    /** Deliver a low-level signal (SIGINT = Ctrl+C) to the running program. */
+    public function signalInteractive(Execution $execution, Request $request): JsonResponse
+    {
+        $this->authorize('view', $execution);
+
+        $request->validate([
+            'signal' => ['required', 'string', 'in:SIGINT,SIGTERM,SIGKILL'],
+        ]);
+
+        $result = $this->dockerService->signalInteractive($execution, $request->string('signal'));
+        $this->service->applyInteractiveResult($execution, $result);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Signal delivered',
             'data' => new ExecutionResource($execution),
         ]);
     }

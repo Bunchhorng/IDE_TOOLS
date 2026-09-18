@@ -1,6 +1,7 @@
 import { createContext, useContext, useCallback, useMemo, useState, type ReactNode } from 'react';
 import { cn } from '../lib/cn';
 import { Icon } from '../components/ui/Icon';
+import { useI18n } from '../i18n';
 
 type ToastKind = 'success' | 'error' | 'info' | 'warning';
 
@@ -32,6 +33,7 @@ const KIND_STYLES: Record<ToastKind, { icon: Parameters<typeof Icon>[0]['name'];
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const { t } = useI18n();
 
   const remove = useCallback((id: number) => {
     setToasts((t) => t.filter((x) => x.id !== id));
@@ -86,7 +88,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <button
                 onClick={() => remove(toast.id)}
                 className="text-faint transition-colors hover:text-ink"
-                aria-label="Dismiss"
+                aria-label={t('general.dismiss')}
               >
                 <Icon name="x" size={16} />
               </button>

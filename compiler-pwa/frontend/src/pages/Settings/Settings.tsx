@@ -10,6 +10,8 @@ import { Toggle } from '../../components/ui/Toggle';
 import { Button, buttonClass } from '../../components/ui/Button';
 import { Avatar } from '../../components/ui/Avatar';
 import { Icon } from '../../components/ui/Icon';
+import { LanguageSwitcher } from '../../components/LanguageSwitcher';
+import { useI18n } from '../../i18n';
 import { cn } from '../../lib/cn';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -26,6 +28,7 @@ export default function Settings() {
   const { theme, setMode } = useTheme();
   const { prefs, updatePrefs } = usePreferences();
   const toast = useToast();
+  const { t, locale } = useI18n();
 
   const [fontPreview, setFontPreview] = useState('int n = 42;\nstd::cout << "hi";');
 
@@ -34,7 +37,7 @@ export default function Settings() {
 
   const setFontSize = (size: number) => {
     updatePrefs({ fontSize: size });
-    toast.success('Font size updated', `${size}px`);
+    toast.success(t('toast.font_updated'), `${size}px`);
   };
 
   return (
@@ -44,10 +47,10 @@ export default function Settings() {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="truncate text-2xl font-bold tracking-tight text-ink">{user?.name}</h1>
-            {user?.is_guest && <Badge tone="warning">Guest</Badge>}
+            {user?.is_guest && <Badge tone="warning">{t('settings.guest')}</Badge>}
           </div>
           <p className="mt-0.5 text-sm text-mute">
-            {user?.email ?? (user?.is_guest ? 'No email — guest account' : 'No email')}
+            {user?.email ?? (user?.is_guest ? t('settings.no_email') : t('settings.no_email_plain'))}
           </p>
         </div>
       </header>
@@ -55,26 +58,24 @@ export default function Settings() {
       {user?.is_guest && (
         <div className="mb-8 flex flex-col gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm">
-            <p className="font-semibold text-ink">You're coding as a guest</p>
-            <p className="mt-0.5 text-mute">
-              Your work is saved on this device. Create an account to keep it everywhere.
-            </p>
+            <p className="font-semibold text-ink">{t('settings.guest_warning')}</p>
+            <p className="mt-0.5 text-mute">{t('settings.guest_desc')}</p>
           </div>
           <Link to="/register" className={buttonClass('outline', 'md')}>
             <Icon name="user" size={15} />
-            Save your account
+            {t('settings.save_account')}
           </Link>
         </div>
       )}
 
       <div className="flex flex-col gap-8">
-        <Section title="Appearance">
+        <Section title={t('settings.appearance')}>
           <Card className="p-5">
             <div className="grid grid-cols-2 gap-3">
               {(
                 [
-                  { value: 'dark', label: 'Dark', icon: 'moon' },
-                  { value: 'light', label: 'Light', icon: 'sun' },
+                  { value: 'dark', label: t('settings.dark'), icon: 'moon' },
+                  { value: 'light', label: t('settings.light'), icon: 'sun' },
                 ] as const
               ).map((opt) => {
                 const active = theme === opt.value;
@@ -95,16 +96,21 @@ export default function Settings() {
                 );
               })}
             </div>
-            <p className="mt-3 text-[11px] text-faint">
-              Theme is applied instantly and synced with the editor.
-            </p>
+            <p className="mt-3 text-[11px] text-faint">{t('settings.theme_desc')}</p>
           </Card>
         </Section>
 
-        <Section title="Editor">
+        <Section title={t('settings.language')}>
+          <Card className="flex flex-col gap-3 p-5">
+            <LanguageSwitcher block />
+            <p className="text-[11px] text-faint">{t('settings.language_desc')}</p>
+          </Card>
+        </Section>
+
+        <Section title={t('settings.editor')}>
           <Card className="flex flex-col gap-5 p-5">
             <div>
-              <p className="mb-2 text-sm font-medium text-ink">Font size</p>
+              <p className="mb-2 text-sm font-medium text-ink">{t('settings.font_size')}</p>
               <div className="flex flex-wrap items-center gap-2">
                 {fontSizeOptions.map((size) => (
                   <button
@@ -125,7 +131,7 @@ export default function Settings() {
             </div>
 
             <div>
-              <p className="mb-2 text-sm font-medium text-ink">Tab size</p>
+              <p className="mb-2 text-sm font-medium text-ink">{t('settings.tab_size')}</p>
               <div className="flex items-center gap-2">
                 {tabSizeOptions.map((size) => (
                   <button
@@ -139,7 +145,7 @@ export default function Settings() {
                     )}
                     aria-pressed={prefs.tabSize === size}
                   >
-                    {size} spaces
+                    {t('settings.spaces', { n: size })}
                   </button>
                 ))}
               </div>
@@ -149,36 +155,39 @@ export default function Settings() {
               <Toggle
                 checked={prefs.wordWrap}
                 onChange={(v) => updatePrefs({ wordWrap: v })}
-                label="Word wrap"
-                description="Wrap long lines to fit the editor width."
+                label={t('settings.word_wrap')}
+                description={t('settings.word_wrap_desc')}
               />
               <Toggle
                 checked={prefs.minimap}
                 onChange={(v) => updatePrefs({ minimap: v })}
-                label="Minimap"
-                description="Show the code overview strip."
+                label={t('settings.minimap')}
+                description={t('settings.minimap_desc')}
               />
               <Toggle
                 checked={prefs.fontLigatures}
                 onChange={(v) => updatePrefs({ fontLigatures: v })}
-                label="Font ligatures"
-                description="Fira-code style joins (e.g. =>, !=, ::)."
+                label={t('settings.ligatures')}
+                description={t('settings.ligatures_desc')}
               />
               <Toggle
                 checked={prefs.autoSave}
                 onChange={(v) => {
                   updatePrefs({ autoSave: v });
-                  toast.info(v ? 'Auto-save on' : 'Auto-save off', v ? 'Changes save automatically.' : 'Manual save (Ctrl+S) enabled.');
+                  toast.info(
+                    v ? t('toast.auto_save_on') : t('toast.auto_save_off'),
+                    v ? t('toast.changes_save_auto') : t('toast.manual_save'),
+                  );
                 }}
-                label="Auto-save"
-                description="Persist your file after each edit."
+                label={t('settings.auto_save')}
+                description={t('settings.auto_save_desc')}
               />
             </div>
 
             <div>
               <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-ink">
                 <Icon name="wand" size={14} className="text-faint" />
-                Live preview
+                {t('settings.live_preview')}
               </p>
               <textarea
                 value={fontPreview}
@@ -192,19 +201,24 @@ export default function Settings() {
           </Card>
         </Section>
 
-        <Section title="Account">
+        <Section title={t('settings.account')}>
           <Card className="flex flex-col gap-1 p-2">
             <div className="flex items-center justify-between px-3 py-2.5">
-              <span className="text-sm text-mute">Member since</span>
+              <span className="text-sm text-mute">{t('settings.member_since')}</span>
               <span className="text-sm font-medium text-ink">
-                {user ? new Date(user.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : '—'}
+                {user
+                  ? new Date(user.created_at).toLocaleDateString(
+                      locale === 'km' ? 'km-KH' : undefined,
+                      { month: 'long', year: 'numeric' },
+                    )
+                  : '—'}
               </span>
             </div>
             <div className="flex items-center justify-between px-3 py-2.5">
-              <span className="text-sm text-mute">Workspace</span>
+              <span className="text-sm text-mute">{t('settings.workspace')}</span>
               <span className="inline-flex items-center gap-1.5 text-sm font-medium text-ink">
                 <Icon name="database" size={15} className="text-success" />
-                Cloud sandbox
+                {t('settings.cloud_sandbox')}
               </span>
             </div>
           </Card>
@@ -212,10 +226,10 @@ export default function Settings() {
 
         <Button
           variant="outline"
-          onClick={() => toast.info('All set ✔', 'Your preferences are saved locally on this device.')}
+          onClick={() => toast.info(t('toast.all_set'), t('toast.prefs_saved'))}
         >
           <Icon name="check" size={15} />
-          Preferences are saved automatically
+          {t('settings.prefs_saved')}
         </Button>
       </div>
     </main>

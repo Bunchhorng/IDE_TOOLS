@@ -18,8 +18,6 @@ interface EditorTopBarProps {
   onSave: () => void;
   onRun: () => void;
   onStop: () => void;
-  onShare: () => void;
-  onDownload: () => void;
   onToggleSidebar: () => void;
   sidebarVisible: boolean;
 }
@@ -34,8 +32,6 @@ export function EditorTopBar({
   onSave,
   onRun,
   onStop,
-  onShare,
-  onDownload,
   onToggleSidebar,
   sidebarVisible,
 }: EditorTopBarProps) {
@@ -45,27 +41,27 @@ export function EditorTopBar({
   return (
     <header className="flex h-[calc(3rem+env(safe-area-inset-top))] shrink-0 items-center gap-2 border-b border-edge bg-page/85 px-2 pt-[env(safe-area-inset-top)] backdrop-blur-md sm:px-3">
       <div className="flex min-w-0 items-center gap-1">
-        <Tooltip label="Back to dashboard" side="bottom">
+        <Tooltip label={t('editor.back_dashboard')} side="bottom">
           <Button
             variant="ghost"
             size="icon"
             className="shrink-0 rounded-lg"
             onClick={() => navigate('/dashboard')}
-            aria-label="Back to dashboard"
+            aria-label={t('editor.back_dashboard')}
           >
             <Icon name="arrowLeft" size={17} />
           </Button>
         </Tooltip>
 
-        <Tooltip label="Toggle file explorer (Ctrl+B)" side="bottom">
+        <Tooltip label={t('editor.toggle_explorer_shortcut')} side="bottom">
           <button
             onClick={onToggleSidebar}
             className={cn(
               'hidden rounded-lg p-2 transition-colors lg:block',
               sidebarVisible ? 'bg-raised text-ink' : 'text-mute hover:bg-raised hover:text-ink',
             )}
-            aria-label="Toggle file explorer"
-            title="Toggle file explorer (Ctrl+B)"
+            aria-label={t('editor.toggle_explorer')}
+            title={t('editor.toggle_explorer_shortcut')}
           >
             <Icon name="panelLeft" size={17} />
           </button>
@@ -82,7 +78,7 @@ export function EditorTopBar({
         {/* Breadcrumb — desktop & tablet */}
         <div className="ml-2 hidden min-w-0 sm:block">
           <p className="flex items-center gap-1.5 text-sm font-semibold leading-tight text-ink">
-            <span className="truncate">{projectName ?? 'Project'}</span>
+            <span className="truncate">{projectName ?? t('editor.project_fallback')}</span>
             {fileName && (
               <>
                 <Icon name="chevronRight" size={11} className="shrink-0 text-faint" />
@@ -115,7 +111,7 @@ export function EditorTopBar({
 
         {/* Mobile — name only */}
         <div className="min-w-0 sm:hidden">
-          <p className="truncate text-sm font-semibold text-ink">{projectName ?? 'Project'}</p>
+          <p className="truncate text-sm font-semibold text-ink">{projectName ?? t('editor.project_fallback')}</p>
           {running ? (
             <p className="flex items-center gap-1 truncate font-mono text-[11px] font-medium text-primary">
               <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary" />
@@ -138,18 +134,6 @@ export function EditorTopBar({
       </div>
 
       <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
-        <Tooltip label="Download file" side="bottom">
-          <Button variant="ghost" size="icon" onClick={onDownload} disabled={!canRun} className="hidden lg:inline-flex" aria-label="Download file">
-            <Icon name="download" size={16} />
-          </Button>
-        </Tooltip>
-
-        <Tooltip label="Share" side="bottom">
-          <Button variant="ghost" size="icon" onClick={onShare} disabled={!canRun} className="hidden lg:inline-flex" aria-label="Share file">
-            <Icon name="share" size={16} />
-          </Button>
-        </Tooltip>
-
         <Tooltip label={t('nav.settings')} side="bottom">
           <Button
             variant="ghost"
@@ -162,10 +146,10 @@ export function EditorTopBar({
           </Button>
         </Tooltip>
 
-        <Tooltip label="Save (Ctrl+S)" side="bottom">
+        <Tooltip label={t('editor.save_shortcut')} side="bottom">
           <Button variant="secondary" size="sm" onClick={onSave} disabled={!canRun || isSaving} className="hidden lg:inline-flex">
             <Icon name="save" size={15} />
-            {isSaving ? 'Saving…' : 'Save'}
+            {isSaving ? t('editor.saving') : t('editor.save')}
           </Button>
         </Tooltip>
 
@@ -175,7 +159,7 @@ export function EditorTopBar({
           onClick={onRun}
           disabled={running || !canRun}
           loading={running}
-          title="Run (Ctrl+Enter)"
+          title={t('editor.run_shortcut')}
           className="cr-btn-run min-w-0 shrink-0 px-2.5 font-semibold md:min-w-[5.5rem] md:px-4"
         >
           <Icon name="play" size={15} className="fill-current" />

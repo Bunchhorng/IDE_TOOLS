@@ -41,7 +41,7 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($request->user()->id)],
+            'email' => ['required', 'string', 'email', 'max:255', 'regex:/^[A-Za-z0-9._%+-]+@etec\.com$/i', Rule::unique('users', 'email')->ignore($request->user()->id)],
             'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
@@ -67,7 +67,7 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'email' => ['required', 'string', 'email', 'max:255', 'regex:/^[A-Za-z0-9._%+-]+@etec\.com$/i', 'unique:users,email'],
             'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 

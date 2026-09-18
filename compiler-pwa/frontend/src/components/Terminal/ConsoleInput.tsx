@@ -21,6 +21,10 @@ interface ConsoleInputProps {
    *  immediately (no auto-run, no static prompt preview — the prompts come
    *  from the program's real output). */
   live?: { onSubmit: (line: string) => void };
+  /** Ctrl+C with an empty draft: interrupt the running program (SIGINT). */
+  onInterrupt?: () => void;
+  /** Ctrl+L: clear the visible terminal without stopping the program. */
+  onCtrlL?: () => void;
 }
 
 export interface ConsoleInputHandle {
@@ -39,13 +43,16 @@ export interface ConsoleInputHandle {
  * an answer the run starts automatically, like pressing ▶ in VS Code.
  */
 export const ConsoleInput = forwardRef<ConsoleInputHandle, ConsoleInputProps>(
-  function ConsoleInput({ code, language, lines, onLinesChange, disabled = false, running, echoFrom = 0, onAllLinesCommitted, live }, ref) {
+  function ConsoleInput({ code, language, lines, onLinesChange, disabled = false, running, echoFrom = 0, onAllLinesCommitted, live, onInterrupt, onCtrlL }, ref) {
   const { t } = useI18n();
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   /** Guard the auto-run callback against double fires for the same state. */
   const autoRunFiredRef = useRef(false);
+  /** Live-mode history of the lines already sent (↑/↓ recall, like a terminal). */
+  const historyRef = useRef<string[]>([]);
+  const historyIndexRef = useRef(0);
   /** Committed lines not already reflected in the session transcript. */
   const pendingLines = lines.slice(echoFrom);
 
@@ -106,6 +113,8 @@ export const ConsoleInput = forwardRef<ConsoleInputHandle, ConsoleInputProps>(
     onLinesChange(next);
     setDraft('');
     if (live) {
+      historyRef.current.push(value);
+      historyIndexRef.current = historyRef.current.length;
       live.onSubmit(value);
       return;
     }
@@ -129,9 +138,59 @@ export const ConsoleInput = forwardRef<ConsoleInputHandle, ConsoleInputProps>(
     if (e.key === 'Enter') {
       e.preventDefault();
       commit();
-    } else if (e.key === 'Backspace' && draft === '' && lines.length > 0 && !live) {
+      return;
+    }
+    if (e.key === 'Backspace' && draft === '' && lines.length > 0 && !live) {
       e.preventDefault();
       onLinesChange(lines.slice(0, -1));
+      return;
+    }
+
+    // Live mode only: VS Code-style terminal editing.
+    if (!live) return;
+
+    if (e.ctrlKey || e.metaKey) {
+      const k = e.key.toLowerCase();
+      if (k === 'c') {
+        // A text selection copies with the native default — only interrupt
+        // when the caret row is empty, exactly like a real terminal.
+        const el = inputRef.current;
+        if (el && el.selectionStart !== el.selectionEnd) return;
+        e.preventDefault();
+        if (draft !== '') {
+          setDraft('');
+        } else {
+          onInterrupt?.();
+        }
+        return;
+      }
+      if (k === 'u') {
+        e.preventDefault();
+        setDraft('');
+        return;
+      }
+      if (k === 'l') {
+        e.preventDefault();
+        onCtrlL?.();
+        return;
+      }
+      return; // other shortcuts (Ctrl+S/Enter/J/B…) reach the window handler
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const h = historyRef.current;
+      if (h.length === 0) return;
+      const next = Math.max(0, historyIndexRef.current - 1);
+      historyIndexRef.current = next;
+      setDraft(h[next] ?? '');
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const h = historyRef.current;
+      if (h.length === 0) return;
+      const next = Math.min(h.length, historyIndexRef.current + 1);
+      historyIndexRef.current = next;
+      setDraft(next < h.length ? h[next] : '');
     }
   };
 

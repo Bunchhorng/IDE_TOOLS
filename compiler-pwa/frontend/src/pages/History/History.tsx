@@ -34,6 +34,8 @@ export default function History() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Execution | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,6 +90,23 @@ export default function History() {
     }
   };
 
+  const handleDeleteAll = async () => {
+    setDeletingAll(true);
+    try {
+      await executionService.deleteAll();
+      setExecutions([]);
+      setTotal(0);
+      setPage(1);
+      setExpanded(null);
+      setDeleteAllOpen(false);
+      toast.success(t('toast.executions_deleted'));
+    } catch {
+      toast.error(t('toast.failed_delete_executions'));
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -109,6 +128,7 @@ export default function History() {
                 { value: 'runtime_error', label: t('history.runtime_error') },
                 { value: 'timeout', label: t('history.timeout') },
                 { value: 'memory_limit', label: t('history.memory_limit') },
+                { value: 'stopped', label: t('history.stopped') },
               ]}
             />
           </div>
@@ -126,6 +146,17 @@ export default function History() {
             <Icon name="refresh" size={14} />
             {t('history.reset')}
           </Button>
+          {total > 0 && (
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => setDeleteAllOpen(true)}
+              className="text-error hover:border-error/40"
+            >
+              <Icon name="trash" size={14} />
+              {t('history.delete_all')}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -168,7 +199,7 @@ export default function History() {
                       )}
                     </div>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-faint">
-                      <span>{timeAgo(e.created_at)}</span>
+                      <span>{timeAgo(e.created_at, t)}</span>
 {e.execution_time !== null && (
                           <>
                             <span className="text-faint">·</span>
@@ -199,7 +230,7 @@ export default function History() {
                     <button
                       onClick={() => setDeleteTarget(e)}
                       className="rounded-md p-1.5 text-mute transition-colors hover:bg-error/10 hover:text-error"
-                      aria-label="Delete execution"
+                      aria-label={t('history.delete_btn')}
                     >
                       <Icon name="trash" size={15} />
                     </button>
@@ -279,6 +310,16 @@ export default function History() {
         title={t('history.delete_title')}
         message={t('history.delete_msg')}
         confirmLabel={t('history.delete_btn')}
+      />
+
+      <ConfirmDialog
+        open={deleteAllOpen}
+        onClose={() => !deletingAll && setDeleteAllOpen(false)}
+        onConfirm={() => void handleDeleteAll()}
+        loading={deletingAll}
+        title={t('history.delete_all_title')}
+        message={t('history.delete_all_msg')}
+        confirmLabel={t('history.delete_all_btn')}
       />
     </main>
   );

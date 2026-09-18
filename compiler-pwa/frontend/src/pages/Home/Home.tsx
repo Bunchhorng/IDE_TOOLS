@@ -4,37 +4,39 @@ import { Icon, type IconName } from '../../components/ui/Icon';
 import { LanguageIcon } from '../../components/LanguageIcon';
 import { Logo } from '../../components/Logo';
 import { InstallPWAButton } from '../../components/InstallPWAButton';
+import { UsageStats } from '../../components/Dashboard/UsageStats';
+import { useI18n } from '../../i18n';
 
-const FEATURES: { icon: IconName; title: string; body: string }[] = [
+const FEATURES: { icon: IconName; titleKey: keyof typeof import('../../i18n/translations').translations.en; bodyKey: keyof typeof import('../../i18n/translations').translations.en }[] = [
   {
     icon: 'lock',
-    title: 'Secure sandbox',
-    body: 'Every run happens in an isolated Docker container with CPU, memory and time limits — safe by default.',
+    titleKey: 'home.sandbox_title',
+    bodyKey: 'home.sandbox_desc',
   },
   {
     icon: 'zap',
-    title: 'Runs in seconds',
-    body: 'Queued and executed in the background. Poll-driven status that shows compile, runtime and memory stats.',
+    titleKey: 'home.runs_title',
+    bodyKey: 'home.runs_desc',
   },
   {
     icon: 'smartphone',
-    title: 'Works offline',
-    body: 'Installable PWA that works on any device. Your code and drafts keep working without a connection.',
+    titleKey: 'home.offline_title',
+    bodyKey: 'home.offline_desc',
   },
   {
     icon: 'terminal',
-    title: 'Real stdout & stdin',
-    body: 'Pass input to your program, capture stdout and stderr, then inspect exact exit codes and timings.',
+    titleKey: 'home.stdout_title',
+    bodyKey: 'home.stdout_desc',
   },
 ];
 
-function CodeWindow() {
+function CodeWindow({ passedLabel }: { passedLabel: string }) {
   const lines = [
     { text: '#include <iostream>', cls: 'text-error' },
     { text: 'using namespace std;', cls: 'text-mute' },
     { text: '', cls: '' },
     { text: 'int main() {', cls: 'text-primary' },
-    { text: '    cout << "Hello, CodeRunner!" << endl;', cls: 'text-ink' },
+    { text: '    cout << "Hello, ETEC STUDIO!" << endl;', cls: 'text-ink' },
     { text: '    return 0;', cls: 'text-primary' },
     { text: '}', cls: 'text-primary' },
   ];
@@ -50,7 +52,7 @@ function CodeWindow() {
         </span>
         <span className="ml-auto hidden items-center gap-1 rounded bg-success/10 px-2 py-0.5 text-[10px] font-semibold text-success sm:flex">
           <span className="h-1.5 w-1.5 rounded-full bg-success" />
-          Passed
+          {passedLabel}
         </span>
       </div>
       <div className="relative">
@@ -74,6 +76,8 @@ function CodeWindow() {
 }
 
 export default function Home() {
+  const { t } = useI18n();
+
   return (
     <div className="min-h-dvh">
       <main>
@@ -85,42 +89,41 @@ export default function Home() {
                   <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-success opacity-75" />
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
                 </span>
-                Now with native sandboxing
+                {t('home.banner_label')}
               </span>
               <h1 className="text-4xl font-bold leading-tight tracking-tight text-ink sm:text-5xl">
-                Write, run &amp; share
-                <span className="block text-primary">code in your browser.</span>
+                {t('home.hero_heading_top')}
+                <span className="block text-primary">{t('home.hero_heading_bottom')}</span>
               </h1>
               <p className="mt-5 max-w-md text-base leading-relaxed text-mute sm:text-lg">
-                A fast, secure online compiler for C, C++ and Python. Real stdin and stdout, file
-                explorer, and a beautiful IDE — all in an installable PWA.
+                {t('home.hero_desc')}
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <Link to="/dashboard" className={buttonClass('primary', 'lg')}>
                   <Icon name="zap" size={17} />
-                  Start coding free
+                  {t('home.cta_free')}
                 </Link>
                 <Link to="/login" className={buttonClass('secondary', 'lg')}>
-                  Sign in
+                  {t('home.hero_sign_in')}
                 </Link>
                 <InstallPWAButton variant="outline" size="lg" />
               </div>
               <div className="mt-8 flex items-center gap-5">
                 <div>
-                  <p className="text-lg font-bold text-ink">C · C++ · Python</p>
-                  <p className="text-xs text-faint">Three languages, one runner</p>
+                  <p className="text-lg font-bold text-ink">{t('home.lang_list')}</p>
+                  <p className="text-xs text-faint">{t('home.lang_subtitle')}</p>
                 </div>
                 <span className="h-8 w-px bg-edge" />
                 <div>
-                  <p className="text-lg font-bold text-ink">Docker</p>
-                  <p className="text-xs text-faint">Isolated per run</p>
+                  <p className="text-lg font-bold text-ink">{t('home.infra_label')}</p>
+                  <p className="text-xs text-faint">{t('home.infra_desc')}</p>
                 </div>
               </div>
             </div>
 
             <div className="relative">
               <div className="absolute -inset-6 -z-10 rounded-3xl bg-primary/5 blur-2xl" aria-hidden="true" />
-              <CodeWindow />
+              <CodeWindow passedLabel={t('status.success')} />
               <div className="mt-4 flex items-center rounded-lg border border-edge bg-panel px-4 py-2.5 text-xs text-mute">
                 <div className="flex items-center gap-3">
                   <LanguageIcon lang="cpp" size="sm" />
@@ -130,25 +133,28 @@ export default function Home() {
                 <span className="mx-3 h-3.5 w-px bg-edge" aria-hidden="true" />
                 <span className="flex items-center gap-1.5 text-success">
                   <Icon name="checkCircle" size={14} />
-                  compiled in 0.4s
+                  {t('home.compiled_in', { time: '0.4s' })}
                 </span>
               </div>
             </div>
           </div>
         </section>
 
+        {/* Live usage — how many students use the IDE */}
+        <UsageStats />
+
         <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {FEATURES.map((f) => (
               <div
-                key={f.title}
+                key={f.titleKey}
                 className="group rounded-xl border border-edge bg-panel p-5 transition-colors hover:border-primary/40"
               >
                 <span className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary transition-transform group-hover:scale-110">
                   <Icon name={f.icon} size={19} />
                 </span>
-                <h3 className="text-sm font-semibold text-ink">{f.title}</h3>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-mute">{f.body}</p>
+                <h3 className="text-sm font-semibold text-ink">{t(f.titleKey)}</h3>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-mute">{t(f.bodyKey)}</p>
               </div>
             ))}
           </div>
@@ -158,12 +164,11 @@ export default function Home() {
           <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-4 py-14 text-center sm:px-6">
             <Logo size="lg" />
             <p className="max-w-md text-sm leading-relaxed text-mute">
-              CodeRunner — the minimal, powerful online code runner built for learning and
-              competitive programming.
+              {t('home.footer_tagline')}
             </p>
             <Link to="/dashboard" className={buttonClass('primary', 'lg')}>
               <Icon name="rocket" size={17} />
-              Get started
+              {t('home.get_started')}
             </Link>
           </div>
         </section>

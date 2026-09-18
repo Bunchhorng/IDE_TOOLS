@@ -1,6 +1,6 @@
-# CodeRunner Frontend
+# ETEC STUDIO Frontend
 
-Mobile-first Progressive Web App for the CodeRunner online compiler. React 19 +
+Mobile-first Progressive Web App for the ETEC STUDIO online compiler. React 19 +
 TypeScript + Vite + Tailwind CSS v4, Monaco editor, offline shell via Workbox.
 
 ## Quick start

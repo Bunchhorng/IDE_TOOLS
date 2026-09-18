@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { TopNav } from '../components/TopNav';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { AppStatusBar } from '../components/AppStatusBar';
 import { LoadingScreen } from '../components/LoadingScreen';
 import Home from '../pages/Home/Home';
 import Login from '../pages/Login/Login';
@@ -36,10 +37,11 @@ export default function AppRouter() {
         <Route
           path="/"
           element={
-            <>
+            <div className="flex min-h-dvh flex-col">
               <TopNav />
               <Home />
-            </>
+              <AppStatusBar />
+            </div>
           }
         />
         <Route
@@ -66,6 +68,7 @@ export default function AppRouter() {
                 <TopNav />
                 <OfflineBanner />
                 <Dashboard />
+                <AppStatusBar />
               </div>
             </ProtectedRoute>
           }
@@ -78,6 +81,7 @@ export default function AppRouter() {
                 <TopNav />
                 <OfflineBanner />
                 <History />
+                <AppStatusBar />
               </div>
             </ProtectedRoute>
           }
@@ -90,6 +94,7 @@ export default function AppRouter() {
                 <TopNav />
                 <OfflineBanner />
                 <Settings />
+                <AppStatusBar />
               </div>
             </ProtectedRoute>
           }
@@ -98,8 +103,10 @@ export default function AppRouter() {
           path="/editor/:projectId"
           element={
             <ProtectedRoute>
-              <OfflineBanner />
-              <EditorPage />
+              <div className="flex h-dvh flex-col">
+                <OfflineBanner />
+                <EditorPage />
+              </div>
             </ProtectedRoute>
           }
         />

@@ -65,6 +65,7 @@ const STATUS_TONE: Record<ExecutionStatus, Tone> = {
   memory_limit: 'warning',
   system_error: 'danger',
   failed: 'danger',
+  stopped: 'warning',
 };
 
 const STATUS_LABEL: Record<ExecutionStatus, string> = {
@@ -77,6 +78,7 @@ const STATUS_LABEL: Record<ExecutionStatus, string> = {
   memory_limit: 'status.memory_limit',
   system_error: 'status.system_error',
   failed: 'status.failed',
+  stopped: 'status.stopped',
 };
 
 export function StatusBadge({ status, className }: { status: ExecutionStatus; className?: string }) {

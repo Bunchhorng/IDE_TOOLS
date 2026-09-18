@@ -19,6 +19,7 @@ class Execution extends Model
     public const STATUS_MEMORY_LIMIT = 'memory_limit';
     public const STATUS_SYSTEM_ERROR = 'system_error';
     public const STATUS_FAILED = 'failed';
+    public const STATUS_STOPPED = 'stopped';
 
     protected $fillable = [
         'user_id',

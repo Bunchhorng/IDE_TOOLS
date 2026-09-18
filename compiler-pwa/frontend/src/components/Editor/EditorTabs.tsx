@@ -1,6 +1,7 @@
 import { cn } from '../../lib/cn';
 import { Icon } from '../ui/Icon';
 import { LanguageIcon } from '../LanguageIcon';
+import { useI18n } from '../../i18n';
 import type { File } from '../../types';
 import { iconForFile } from '../../lib/languages';
 
@@ -13,6 +14,7 @@ interface EditorTabsProps {
 }
 
 export function EditorTabs({ files, activeFileId, dirtyIds, onSelect, onCloseTab }: EditorTabsProps) {
+  const { t } = useI18n();
   if (files.length === 0) return null;
 
   return (
@@ -42,12 +44,12 @@ export function EditorTabs({ files, activeFileId, dirtyIds, onSelect, onCloseTab
               }}
               className={cn(
                 'ml-0.5 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded text-faint transition-colors hover:bg-mute/15 hover:text-ink',
-                !active && 'opacity-0 group-hover:opacity-100',
+                !active && 'lg:opacity-0 lg:group-hover:opacity-100',
               )}
-              aria-label={`Close ${file.filename}`}
+              aria-label={t('editor.close_tab', { name: file.filename })}
             >
               {dirty ? (
-                <span className="block h-2 w-2 rounded-full bg-primary" title="Unsaved changes" />
+                <span className="block h-2 w-2 rounded-full bg-primary" title={t('editor.unsaved_changes')} />
               ) : (
                 <Icon name="x" size={13} />
               )}

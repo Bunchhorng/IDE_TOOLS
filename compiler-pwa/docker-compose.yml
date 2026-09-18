@@ -3,6 +3,12 @@ services:
     image: mysql:8.0
     container_name: coderunner-mysql
     restart: unless-stopped
+    # Cap the DB itself so a runaway query/load cannot starve the host that
+    # also runs sandbox containers. 512MB is enough for this schema.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     environment:
       MYSQL_DATABASE: ${DB_DATABASE:-compiler}
       MYSQL_USER: ${DB_USERNAME:-compiler}
@@ -16,7 +22,7 @@ services:
       timeout: 5s
       retries: 10
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     networks:
       - coderunner-net
 
@@ -67,6 +73,7 @@ services:
     volumes:
       - ./backend:/var/www/html
       - ./docker/backend/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro
+      - ./docker/backend/www.conf:/usr/local/etc/php-fpm.d/www.conf:ro
       - /var/run/docker.sock:/var/run/docker.sock
     # php-fpm workers run as www-data; give them the host docker group gid so
     # interactive sessions can talk to the docker socket (default matches the
@@ -80,7 +87,9 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "9000:9000"
+      # php-fpm is a FastCGI server — never expose it beyond localhost; nginx
+      # reaches it over the internal docker network.
+      - "127.0.0.1:9000:9000"
     networks:
       coderunner-net:
         ipv4_address: 172.20.0.10
@@ -109,11 +118,17 @@ services:
       - EXECUTION_MEMORY_LIMIT=${EXECUTION_MEMORY_LIMIT:-134217728}
       - EXECUTION_OUTPUT_LIMIT=${EXECUTION_OUTPUT_LIMIT:-1000000}
       - EXECUTION_HOST_BASE=${EXECUTION_HOST_BASE}
+      # How many parallel queue workers (=> parallel sandbox containers).
+      # Size as: CPU cores x 0.75 for compile-heavy classrooms.
+      - WORKER_PROCS=${WORKER_PROCS:-4}
     volumes:
       - ./backend:/var/www/html
       - ./backend:${EXECUTION_HOST_BASE}
       - /var/run/docker.sock:/var/run/docker.sock
-    command: php artisan queue:work --sleep=1 --tries=1 --timeout=60
+    # N parallel queue:work processes; each processes one job (= one docker
+    # sandbox) at a time. --max-jobs forces periodic restarts (memory leak
+    # hygiene). Job timeout 90s > sandbox 5s wall clock + compile + headroom.
+    command: sh -c "for i in $$(seq 1 $${WORKER_PROCS:-4}); do php artisan queue:work --sleep=1 --tries=1 --timeout=90 --max-jobs=200 & done; wait"
     depends_on:
       mysql:
         condition: service_healthy
@@ -151,6 +166,24 @@ services:
     depends_on:
       - backend
       - frontend
+    networks:
+      - coderunner-net
+
+  # Database admin UI — localhost only. Login with DB_USERNAME/DB_PASSWORD
+  # (default compiler/secret) or root/${DB_ROOT_PASSWORD:-rootsecret}.
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: coderunner-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 100M
+    ports:
+      - "127.0.0.1:8081:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
     networks:
       - coderunner-net
 

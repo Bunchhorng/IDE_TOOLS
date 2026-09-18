@@ -58,7 +58,8 @@ export type ExecutionStatus =
   | 'timeout'
   | 'memory_limit'
   | 'system_error'
-  | 'failed';
+  | 'failed'
+  | 'stopped';
 
 export interface Execution {
   id: number;
@@ -70,6 +71,10 @@ export interface Execution {
   interactive?: boolean;
   /** Interactive-only: true once the sandbox has exited. */
   interactive_finished?: boolean | null;
+  /** True when the sandbox capped stdout/stderr — the returned text is incomplete. */
+  truncated?: boolean;
+  /** Live PTY stream (base64 raw bytes) for the interactive terminal canvas. Transient. */
+  output_b64?: string | null;
   source_code: string;
   stdin: string | null;
   stdout: string;
@@ -93,8 +98,37 @@ export interface ExecuteRequest {
 }
 
 export interface InteractiveInputRequest {
+  /** Legacy line input (text + implicit Enter). */
   line?: string;
+  /** Raw terminal bytes as a base64 string (from xterm onData). */
+  chunk?: string;
+  /** Resize the PTY (both must be > 0). */
+  rows?: number;
+  cols?: number;
   close?: boolean;
+}
+
+export interface InteractiveSignalRequest {
+  signal: 'SIGINT' | 'SIGTERM' | 'SIGKILL';
+}
+
+export interface UsageStats {
+  users: {
+    total: number;
+    registered: number;
+    guests: number;
+    active_today: number;
+    active_week: number;
+  };
+  executions: {
+    total: number;
+    today: number;
+    peak_day: string | null;
+    peak_count: number;
+  };
+  trend: { date: string; count: number }[];
+  languages: { name: string; slug: string; count: number }[];
+  statuses: { status: string; count: number }[];
 }
 
 export interface ApiResponse<T> {

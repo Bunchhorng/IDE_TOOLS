@@ -1,4 +1,4 @@
-# CodeRunner — Online Compiler PWA
+# ETEC STUDIO — Online Compiler PWA
 
 A secure, mobile-friendly online code editor and execution platform installable as a PWA. Write, save, compile, and run **C**, **C++**, and **Python** code in an isolated Docker sandbox.
 

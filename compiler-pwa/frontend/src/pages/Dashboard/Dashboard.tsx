@@ -11,13 +11,15 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { Spinner } from '../../components/ui/Button';
 import { StatusBadge } from '../../components/ui/Badge';
 import { Dropdown } from '../../components/ui/Dropdown';
+import { Modal } from '../../components/ui/Modal';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { Icon } from '../../components/ui/Icon';
 import { LanguageIcon, type LangGlyph } from '../../components/LanguageIcon';
 import { InstallPWAButton } from '../../components/InstallPWAButton';
-import { greeting, timeAgo, formatExecutionTime } from '../../lib/format';
+import { timeAgo, formatExecutionTime } from '../../lib/format';
 import { projectService } from '../../services/projectService';
 import { executionService } from '../../services/executionService';
+import { useI18n } from '../../i18n';
 import type { Project, Execution } from '../../types';
 
 function langGlyphFor(lang: string): LangGlyph {
@@ -30,6 +32,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
+  const { t } = useI18n();
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [total, setTotal] = useState(0);
@@ -43,6 +46,9 @@ export default function Dashboard() {
   const [executionTotal, setExecutionTotal] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<Project | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renaming, setRenaming] = useState(false);
   const [favorites, setFavorites] = useLocalStorage<number[]>('coderunner-favorites', []);
 
   const loadProjects = useCallback(async (p: number, append = false) => {
@@ -55,11 +61,11 @@ export default function Dashboard() {
       setLastPage(data.last_page);
       setPage(data.current_page);
     } catch {
-      toast.error('Failed to load projects');
+      toast.error(t('toast.failed_load_projects'));
     } finally {
       setLoadingProjects(false);
     }
-  }, [toast]);
+  }, [toast, t]);
 
   const loadHistory = useCallback(async () => {
     setLoadingHistory(true);
@@ -104,32 +110,54 @@ export default function Dashboard() {
       await projectService.delete(deleteTarget.id);
       setProjects((ps) => ps.filter((p) => p.id !== deleteTarget.id));
       setTotal((t) => Math.max(0, t - 1));
-      toast.success('Project deleted', deleteTarget.name);
+      toast.success(t('toast.project_deleted'), deleteTarget.name);
     } catch {
-      toast.error('Failed to delete project');
+      toast.error(t('toast.failed_delete_project'));
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
     }
   };
 
+  const openRename = (project: Project) => {
+    setRenameTarget(project);
+    setRenameValue(project.name);
+    setRenaming(false);
+  };
+
+  const handleRename = async () => {
+    if (!renameTarget || !renameValue.trim()) return;
+    setRenaming(true);
+    try {
+      const response = await projectService.update(renameTarget.id, { name: renameValue.trim() });
+      const patch = response.data;
+      setProjects((ps) => ps.map((p) => (p.id === patch.id ? { ...p, ...patch } : p)));
+      toast.success(t('toast.project_renamed'), patch.name);
+      setRenameTarget(null);
+    } catch {
+      toast.error(t('toast.failed_rename_project'));
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   const stats = [
     {
-      label: 'Projects',
+      label: t('dashboard.projects'),
       value: total,
       icon: 'layers' as const,
       tint: 'text-info',
       bg: 'bg-info/10',
     },
     {
-      label: 'Executions',
+      label: t('dashboard.executions'),
       value: loadingHistory ? '…' : executionTotal,
       icon: 'zap' as const,
       tint: 'text-primary',
       bg: 'bg-primary/10',
     },
     {
-      label: 'Files',
+      label: t('dashboard.files'),
       value: projects.reduce((n, p) => n + (p.files?.length ?? 0), 0),
       icon: 'fileText' as const,
       tint: 'text-success',
@@ -137,20 +165,24 @@ export default function Dashboard() {
     },
   ];
 
+  const hour = new Date().getHours();
+  const greetingKey =
+    hour < 5 ? 'format.night' : hour < 12 ? 'format.morning' : hour < 18 ? 'format.afternoon' : 'format.evening';
+
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-ink">
-            {greeting()},{user?.name.split(' ')[0] ?? 'there'}.
+            {t(greetingKey)},{user?.name.split(' ')[0] ?? t('dashboard.there')}.
           </h1>
-          <p className="mt-1 text-sm text-mute">Pick up where you left off or start something new.</p>
+          <p className="mt-1 text-sm text-mute">{t('dashboard.subheading')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <InstallPWAButton variant="secondary" size="lg" />
           <Button size="lg" onClick={() => setShowNew(true)}>
             <Icon name="plus" size={17} />
-            New project
+            {t('dashboard.new_project')}
           </Button>
         </div>
       </div>
@@ -171,12 +203,12 @@ export default function Dashboard() {
 
       <div className="mt-10">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-ink">Projects</h2>
+          <h2 className="text-base font-semibold text-ink">{t('dashboard.projects')}</h2>
           <div className="w-full max-w-56">
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search projects…"
+              placeholder={t('dashboard.search_projects')}
               leftIcon="search"
             />
           </div>
@@ -190,17 +222,17 @@ export default function Dashboard() {
           <Card className="mt-4">
             <EmptyState
               icon="folder"
-              title={query ? 'No matching projects' : 'No projects yet'}
+              title={query ? t('dashboard.no_matching') : t('dashboard.no_projects')}
               message={
                 query
-                  ? 'Try a different search term.'
-                  : 'Create your first project to start running code instantly.'
+                  ? t('dashboard.try_different')
+                  : t('dashboard.create_first')
               }
               action={
                 !query && (
                   <Button onClick={() => setShowNew(true)}>
                     <Icon name="plus" size={15} />
-                    New project
+                    {t('dashboard.new_project')}
                   </Button>
                 )
               }
@@ -214,7 +246,7 @@ export default function Dashboard() {
               ).slice(0, 3);
               const fav = favorites.includes(project.id);
               return (
-                <Card key={project.id} className="group overflow-hidden">
+                <Card key={project.id} className="group">
                   <button
                     onClick={() => navigate(`/editor/${project.id}`)}
                     className="block w-full p-4 text-left"
@@ -230,7 +262,7 @@ export default function Dashboard() {
                             toggleFavorite(project.id);
                           }}
                           className="rounded-md p-1.5 transition-colors hover:bg-raised"
-                          aria-label={fav ? 'Remove from favorites' : 'Add to favorites'}
+                          aria-label={fav ? t('dashboard.fav_remove') : t('dashboard.fav_add')}
                         >
                           <Icon
                             name="star"
@@ -248,19 +280,25 @@ export default function Dashboard() {
                           items={[
                             {
                               key: 'open',
-                              label: 'Open',
+                              label: t('dashboard.open'),
                               icon: 'external',
                               onSelect: () => navigate(`/editor/${project.id}`),
                             },
                             {
                               key: 'home',
-                              label: 'View history',
+                              label: t('dashboard.view_history'),
                               icon: 'clock',
                               onSelect: () => navigate('/history'),
                             },
                             {
+                              key: 'rename',
+                              label: t('dashboard.rename'),
+                              icon: 'pencil',
+                              onSelect: () => openRename(project),
+                            },
+                            {
                               key: 'delete',
-                              label: 'Delete',
+                              label: t('dashboard.delete'),
                               icon: 'trash',
                               danger: true,
                               onSelect: () => setDeleteTarget(project),
@@ -271,14 +309,14 @@ export default function Dashboard() {
                     </div>
                     <h3 className="truncate text-sm font-semibold text-ink">{project.name}</h3>
                     <p className="mt-0.5 line-clamp-2 min-h-8 text-[13px] text-mute">
-                      {project.description || 'No description'}
+                      {project.description || t('dashboard.no_description')}
                     </p>
                     <div className="mt-3 flex items-center justify-between text-[11px] text-faint">
                       <span className="inline-flex items-center gap-1">
                         <Icon name="fileText" size={12} />
-                        {project.files?.length ?? 0} file{(project.files?.length ?? 0) === 1 ? '' : 's'}
+                        {project.files?.length ?? 0} {(project.files?.length ?? 0) === 1 ? t('dashboard.file') : t('dashboard.files_suffix')}
                       </span>
-                      <span>{timeAgo(project.updated_at)}</span>
+                      <span>{timeAgo(project.updated_at, t)}</span>
                     </div>
                   </button>
                   {glyphs.length > 0 && (
@@ -291,7 +329,7 @@ export default function Dashboard() {
                           to={`/editor/${project.id}`}
                           className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
                         >
-                          Open editor
+                          {t('dashboard.open_editor')}
                           <Icon name="arrowRight" size={12} />
                         </Link>
                       </span>
@@ -311,7 +349,7 @@ export default function Dashboard() {
               disabled={loadingProjects}
             >
               <Icon name="chevronDown" size={15} />
-              Load more
+              {t('dashboard.load_more')}
             </Button>
           </div>
         )}
@@ -321,13 +359,13 @@ export default function Dashboard() {
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
             <Icon name="clock" size={16} className="text-faint" />
-            Recent executions
+            {t('dashboard.recent_executions')}
           </h2>
           <Link
             to="/history"
             className="inline-flex items-center gap-1 text-[13px] font-medium text-primary hover:underline"
           >
-            View all
+            {t('dashboard.view_all')}
             <Icon name="arrowRight" size={14} />
           </Link>
         </div>
@@ -341,8 +379,8 @@ export default function Dashboard() {
             <EmptyState
               compact
               icon="terminal"
-              title="Nothing ran yet"
-              message="Run your first program and it will show up here."
+              title={t('dashboard.no_ran_yet')}
+              message={t('dashboard.run_first')}
             />
           </Card>
         ) : (
@@ -352,9 +390,9 @@ export default function Dashboard() {
                 <LanguageIcon lang="file" size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-medium text-ink">
-                    {e.filename ?? 'Untitled file'}
+                    {e.filename ?? t('dashboard.untitled')}
                   </p>
-                  <p className="text-[11px] text-faint">{timeAgo(e.created_at)}</p>
+                  <p className="text-[11px] text-faint">{timeAgo(e.created_at, t)}</p>
                 </div>
                 {e.execution_time !== null && (
                   <span className="hidden font-mono text-[11px] text-mute sm:block">
@@ -370,14 +408,51 @@ export default function Dashboard() {
 
       <NewProjectModal open={showNew} onClose={() => setShowNew(false)} />
 
+      <Modal
+        open={!!renameTarget}
+        onClose={() => !renaming && setRenameTarget(null)}
+        title={t('dashboard.rename_title')}
+        description={t('dashboard.rename_desc')}
+        size="sm"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setRenameTarget(null)}
+              disabled={renaming}
+            >
+              {t('dialog.cancel')}
+            </Button>
+            <Button
+              onClick={() => void handleRename()}
+              loading={renaming}
+              disabled={!renameValue.trim()}
+            >
+              <Icon name="check" size={15} />
+              {t('dashboard.rename_save')}
+            </Button>
+          </>
+        }
+      >
+        <Input
+          value={renameValue}
+          onChange={(e) => setRenameValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void handleRename();
+          }}
+          placeholder={t('dashboard.rename_placeholder')}
+          autoFocus
+        />
+      </Modal>
+
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => void handleDelete()}
         loading={deleting}
-        title={`Delete ${deleteTarget?.name}?`}
-        message="All files and execution history for this project will be permanently deleted."
-        confirmLabel="Delete project"
+        title={t('dashboard.delete_title', { name: deleteTarget?.name ?? '' })}
+        message={t('dashboard.delete_msg')}
+        confirmLabel={t('dashboard.delete_btn')}
       />
     </main>
   );

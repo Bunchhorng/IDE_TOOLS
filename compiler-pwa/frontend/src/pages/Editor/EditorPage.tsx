@@ -63,10 +63,12 @@ export default function EditorPage() {
   const [isSaving, setIsSaving] = useState(false);
   /** Active interactive session: the sandbox id of the running program. */
   const [liveSessionId, setLiveSessionId] = useState<number | null>(null);
-  /** Accumulated stdout of an interactive program between input deliveries. */
-  const [liveOutput, setLiveOutput] = useState('');
-  /** Mirror of liveOutput for the poll loop (avoid stale closures). */
-  const liveOutputRef = useRef('');
+  /** Live PTY stream (base64 raw bytes) of the running interactive program. */
+  const [liveOutputB64, setLiveOutputB64] = useState('');
+  /** Mirror of liveOutputB64 for the poll loop (avoid stale closures). */
+  const liveOutputB64Ref = useRef('');
+  /** The sandbox capped stdout/stderr during this live session. */
+  const [liveTruncated, setLiveTruncated] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>('code');
   const [terminalTab, setTerminalTab] = useState<PanelTab>('terminal');
   const [moreOpen, setMoreOpen] = useState(false);
@@ -299,12 +301,23 @@ export default function EditorPage() {
       interactive: true,
       stdin:
         inputLinesRef.current.length > 0 ? inputLinesRef.current.join('\n') : null,
+      // Runtime failures in the PTY session are merged into the stream, not a
+      // separate stderr file — surface the raw stream so the Errors tab/status
+      // still explain what crashed. (Compile errors already carry stderr.)
+      stderr:
+        exec.stderr ||
+        (['compile_error', 'runtime_error', 'timeout', 'memory_limit', 'system_error', 'failed'].includes(exec.status)
+          ? (exec.stdout ?? '')
+          : ''),
     };
+    // The sandbox is gone but the terminal canvas stays mounted — the finished
+    // stream remains visible as ONE continuous session (like a real terminal).
     liveActiveRef.current = false;
     liveSessionIdRef.current = null;
-    setLiveSessionId(null);
-    setLiveOutput('');
-    liveOutputRef.current = '';
+    setLiveSessionId(id);
+    setLiveOutputB64(exec.output_b64 ?? liveOutputB64Ref.current);
+    liveOutputB64Ref.current = exec.output_b64 ?? liveOutputB64Ref.current;
+    setLiveTruncated(exec.truncated ?? false);
     setExecution(finished);
     isRunningRef.current = false;
     setIsRunning(false);
@@ -320,8 +333,9 @@ export default function EditorPage() {
     setSuppress401Reload(true);
     setLiveSessionId(exec.id);
     setExecution(null);
-    setLiveOutput(exec.stdout ?? '');
-    liveOutputRef.current = exec.stdout ?? '';
+    setLiveOutputB64(exec.output_b64 ?? '');
+    liveOutputB64Ref.current = exec.output_b64 ?? '';
+    setLiveTruncated(exec.truncated ?? false);
     const id = exec.id;
     pollTimerRef.current = window.setInterval(() => {
       void pollLoop(id, token);
@@ -335,28 +349,47 @@ export default function EditorPage() {
       const res = await executionService.pollInteractive(id);
       if (!liveActiveRef.current || token !== sessionTokenRef.current) return;
       const exec = res.data;
-      const out = exec.stdout ?? '';
-      if (out !== liveOutputRef.current) {
-        liveOutputRef.current = out;
+      const stream = exec.output_b64 ?? '';
+      if (stream !== liveOutputB64Ref.current) {
+        liveOutputB64Ref.current = stream;
       }
-      setLiveOutput(out);
+      setLiveOutputB64(stream);
+      setLiveTruncated(exec.truncated ?? false);
       if (exec.interactive_finished) finishLive(id, exec, token);
     } catch {
       /* transient network error — keep polling; the sandbox session cap ends it */
     }
   };
 
-  /** Forward one typed line (Enter) to the running program. */
-  const handleLiveSubmit = useCallback(async (line: string) => {
+  /** Forward raw terminal bytes (keystrokes, base64) to the running program. */
+  const handleRawInput = useCallback(async (chunk: string) => {
     const id = liveSessionIdRef.current;
     if (id == null || !liveActiveRef.current) return;
     const token = sessionTokenRef.current;
     try {
-      const res = await executionService.sendInteractiveInput(id, { line });
+      const res = await executionService.sendInteractiveInput(id, { chunk });
       if (!liveActiveRef.current || token !== sessionTokenRef.current) return;
       const exec = res.data;
-      setLiveOutput(exec.stdout ?? '');
-      liveOutputRef.current = exec.stdout ?? '';
+      setLiveOutputB64(exec.output_b64 ?? '');
+      liveOutputB64Ref.current = exec.output_b64 ?? '';
+      setLiveTruncated(exec.truncated ?? false);
+      if (exec.interactive_finished) finishLive(id, exec, token);
+    } catch {
+      /* ignore — polling continues the session */
+    }
+  }, []);
+
+  /** Resize the sandbox PTY to match the terminal canvas. */
+  const handleLiveResize = useCallback(async (rows: number, cols: number) => {
+    const id = liveSessionIdRef.current;
+    if (id == null || !liveActiveRef.current || !rows || !cols) return;
+    const token = sessionTokenRef.current;
+    try {
+      const res = await executionService.sendInteractiveInput(id, { rows, cols });
+      if (!liveActiveRef.current || token !== sessionTokenRef.current) return;
+      const exec = res.data;
+      setLiveOutputB64(exec.output_b64 ?? '');
+      liveOutputB64Ref.current = exec.output_b64 ?? '';
       if (exec.interactive_finished) finishLive(id, exec, token);
     } catch {
       /* ignore — polling continues the session */
@@ -378,8 +411,9 @@ export default function EditorPage() {
       const id = liveSessionIdRef.current;
       liveSessionIdRef.current = null;
       setLiveSessionId(null);
-      setLiveOutput('');
-      liveOutputRef.current = '';
+      setLiveOutputB64('');
+      liveOutputB64Ref.current = '';
+      setLiveTruncated(false);
       if (id == null) {
         if (isRunningRef.current) {
           isRunningRef.current = false;
@@ -446,16 +480,17 @@ export default function EditorPage() {
 
   /** Stop the sandbox when the editor unmounts (never leave a container running). */
   useEffect(() => {
-    const wasLive = liveActiveRef.current;
-    const id = liveSessionIdRef.current;
-    if (wasLive && id != null) {
-      void executionService.sendInteractiveInput(id, { close: true }).catch(() => undefined);
-    }
-    setSuppress401Reload(false);
-    if (pollTimerRef.current) {
-      window.clearInterval(pollTimerRef.current);
-    }
-    return undefined;
+    return () => {
+      const id = liveSessionIdRef.current;
+      if (liveActiveRef.current && id != null) {
+        void executionService.sendInteractiveInput(id, { close: true }).catch(() => undefined);
+      }
+      setSuppress401Reload(false);
+      if (pollTimerRef.current) {
+        window.clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -501,7 +536,7 @@ export default function EditorPage() {
         if (dirty) await handleSave();
         setIsRunning(true);
         setExecution(null);
-        setLiveOutput('');
+        setLiveOutputB64('');
         const created = await executionService.execute({
           language: selectedLanguage,
           project_id: project.id,
@@ -644,8 +679,14 @@ export default function EditorPage() {
     terminalPanelRef.current?.focusConsole();
   };
 
-  /** Wipe the terminal: past output, errors, and any typed input. */
+  /** Wipe the terminal: past output, errors, and any typed input.
+   *  A live run is still going — clearing wipes the on-screen transcript but
+   *  must NOT kill the sandbox (like clearing a real terminal pane). */
   const handleClearTerminal = () => {
+    if (liveSessionId !== null) {
+      terminalPanelRef.current?.clearLive();
+      return;
+    }
     stopLiveSession(false);
     setExecution(null);
     setStdin('');
@@ -655,6 +696,12 @@ export default function EditorPage() {
 
   /** Program is waiting for input — make sure the console is visible. */
   const handleInputReady = useCallback(() => {
+    // Live PTY run on mobile: surface the output tab that hosts the xterm
+    // canvas (once per session). Never on desktop — that main is lg:hidden.
+    if (liveActiveRef.current && !window.matchMedia('(min-width: 1024px)').matches) {
+      setMobileTab('output');
+      return;
+    }
     // On mobile, jump out of Files/More so the console row is on screen.
     setMobileTab((t) => (t === 'files' || t === 'more' ? 'code' : t));
   }, []);
@@ -884,8 +931,8 @@ export default function EditorPage() {
   const handleShare = async () => {
     if (!activeFile) return;
     const shareData: ShareData = {
-      title: `${project?.name ?? 'CodeRunner'} — ${activeFile.filename}`,
-      text: `Check out this ${activeFile.filename} on CodeRunner:\n\n${activeFile.content}`,
+      title: `${project?.name ?? 'ETEC STUDIO'} — ${activeFile.filename}`,
+      text: `Check out this ${activeFile.filename} on ETEC STUDIO:\n\n${activeFile.content}`,
     };
     try {
       if (navigator.share) {
@@ -908,14 +955,14 @@ export default function EditorPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-page">
+      <div className="flex h-full flex-1 items-center justify-center bg-page">
         <Spinner size="lg" className="text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-page text-ink">
+    <div className="flex min-h-0 flex-1 flex-col bg-page text-ink">
       <EditorTopBar
         projectName={project?.name ?? null}
         fileName={activeFile?.filename}
@@ -926,8 +973,6 @@ export default function EditorPage() {
         onSave={() => void handleSave()}
         onRun={() => void handleRun(false)}
         onStop={() => stopLiveSession()}
-        onShare={() => void handleShare()}
-        onDownload={handleDownload}
         onToggleSidebar={sidebar.toggle}
         sidebarVisible={!sidebar.collapsed}
       />
@@ -962,7 +1007,7 @@ export default function EditorPage() {
               onTouchStart={sidebar.onTouchStart}
               onClick={sidebar.onClick}
               className="absolute inset-y-0 -right-1 z-10 w-2.5 cursor-col-resize touch-none transition-colors hover:bg-primary/40"
-              aria-label="Resize sidebar"
+              aria-label={t('editor.resize_sidebar')}
             />
         </aside>
 
@@ -1061,12 +1106,14 @@ export default function EditorPage() {
                   onInputLinesChange={handleInputLinesChange}
                   consoleRef={consoleRef}
                   onFocusConsole={handleFocusConsole}
-onInputReady={handleInputReady}
+                  onInputReady={handleInputReady}
                   onAllLinesCommitted={handleAllLinesCommitted}
                   onClear={handleClearTerminal}
-                  liveOutput={liveOutput}
+                  liveOutputB64={liveOutputB64}
+                  liveTruncated={liveTruncated}
                   liveActive={liveSessionId !== null}
-                  onLiveSubmit={handleLiveSubmit}
+                  onRawInput={handleRawInput}
+                  onResize={handleLiveResize}
                   onLiveStop={() => stopLiveSession()}
                 />
               </div>
@@ -1074,33 +1121,35 @@ onInputReady={handleInputReady}
           </main>
         )}
 
-        {mobileTab === 'output' && (
-          <main className="flex min-h-0 flex-1 flex-col pt-px lg:hidden">
-            <TerminalPanel
-              ref={terminalPanelRef}
-              execution={execution}
-              isRunning={isRunning}
-              hasErrors={hasErrors}
-              tab={terminalTab}
-              onTabChange={setTerminalTab}
-              activeLanguage={activeFile?.language}
-              fileContent={activeFile?.content}
-              onGoToLine={handleGoToErrorLine}
-              onApplyFix={handleApplyFix}
-              inputLines={inputLines}
-              onInputLinesChange={handleInputLinesChange}
-              consoleRef={consoleRef}
-              onFocusConsole={handleFocusConsole}
-              onInputReady={handleInputReady}
-              onAllLinesCommitted={handleAllLinesCommitted}
-              onClear={handleClearTerminal}
-              liveOutput={liveOutput}
-              liveActive={liveSessionId !== null}
-              onLiveSubmit={handleLiveSubmit}
-              onLiveStop={() => stopLiveSession()}
-            />
-          </main>
-        )}
+         {mobileTab === 'output' && (
+           <main className="flex min-h-0 flex-1 flex-col pt-px lg:hidden">
+             <TerminalPanel
+               ref={terminalPanelRef}
+               execution={execution}
+               isRunning={isRunning}
+               hasErrors={hasErrors}
+               tab={terminalTab}
+               onTabChange={setTerminalTab}
+               activeLanguage={activeFile?.language}
+               fileContent={activeFile?.content}
+               onGoToLine={handleGoToErrorLine}
+               onApplyFix={handleApplyFix}
+               inputLines={inputLines}
+               onInputLinesChange={handleInputLinesChange}
+               consoleRef={consoleRef}
+               onFocusConsole={handleFocusConsole}
+               onInputReady={handleInputReady}
+               onAllLinesCommitted={handleAllLinesCommitted}
+               onClear={handleClearTerminal}
+               liveOutputB64={liveOutputB64}
+               liveTruncated={liveTruncated}
+               liveActive={liveSessionId !== null}
+               onRawInput={handleRawInput}
+               onResize={handleLiveResize}
+               onLiveStop={() => stopLiveSession()}
+             />
+           </main>
+         )}
       </div>
 
       <div className="hidden lg:block">
@@ -1121,11 +1170,11 @@ onInputReady={handleInputReady}
         <button
           onClick={() => (isRunning ? stopLiveSession() : void handleRun())}
           className={cn(
-            'fixed bottom-20 right-4 z-40 flex h-13 w-13 items-center justify-center rounded-full text-white transition-all active:scale-95 lg:hidden',
+            'fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-40 flex h-13 w-13 items-center justify-center rounded-full text-white transition-all active:scale-95 lg:hidden',
             isRunning ? 'cr-btn-stop' : 'cr-btn-run',
           )}
-          aria-label={isRunning ? t('editor.stop_program') : 'Run code'}
-          title={isRunning ? t('editor.stop_program') : 'Run'}
+          aria-label={isRunning ? t('editor.stop_program') : t('editor.run_code')}
+          title={isRunning ? t('editor.stop_program') : t('editor.run')}
         >
           {isRunning ? (
             <>
@@ -1144,7 +1193,7 @@ onInputReady={handleInputReady}
       {/* Mobile bottom nav */}
       <nav
         className="fixed inset-x-0 bottom-0 z-40 flex min-h-16 items-stretch border-t border-edge bg-page/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
-        aria-label="Mobile navigation"
+        aria-label={t('nav.mobile_navigation')}
       >
         {mobileNav.map((item) => {
           const active = mobileTab === item.key;

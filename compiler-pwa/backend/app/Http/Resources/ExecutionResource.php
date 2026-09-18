@@ -26,6 +26,8 @@ class ExecutionResource extends JsonResource
             'exit_code' => $this->exit_code,
             'execution_time' => $this->execution_time,
             'memory_usage' => $this->memory_usage,
+            'truncated' => $this->truncated ?? false,
+            'output_b64' => $this->output_b64 ?? null,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
             'language' => new LanguageResource($this->whenLoaded('language')),

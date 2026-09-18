@@ -1,4 +1,7 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import '@xterm/xterm/css/xterm.css';
 import { ConsoleInput, type ConsoleInputHandle } from './ConsoleInput';
 import { Tabs } from '../ui/Tabs';
 import { Button } from '../ui/Button';
@@ -10,6 +13,7 @@ import { formatExecutionTime } from '../../lib/format';
 import { TerminalSession } from './TerminalSession';
 import { useI18n } from '../../i18n';
 import { translations, type TranslationKey } from '../../i18n/translations';
+import { useTheme } from '../../context/ThemeContext';
 import type { Execution, ExecutionStatus } from '../../types';
 
 interface TerminalPanelProps {
@@ -39,12 +43,16 @@ interface TerminalPanelProps {
   onAllLinesCommitted?: () => void;
   /** Clear the terminal output and console history. */
   onClear?: () => void;
-  /** Live interactive session: accumulated stdout while the program waits for input. */
-  liveOutput?: string;
-  /** An interactive session is in flight — render live output + live input row. */
+  /** Live interactive session: the raw PTY stream as base64 (output_b64). */
+  liveOutputB64?: string;
+  /** True when the sandbox capped stdout/stderr during the live session. */
+  liveTruncated?: boolean;
+  /** An interactive session is in flight — render the xterm canvas. */
   liveActive?: boolean;
-  /** Forward one typed line to the running program. */
-  onLiveSubmit?: (line: string) => void;
+  /** Forward raw terminal bytes (base64) to the running program. */
+  onRawInput?: (chunk: string) => void;
+  /** Resize the sandbox PTY (rows, cols). */
+  onResize?: (rows: number, cols: number) => void;
   /** Stop the live session (kills the sandbox). */
   onLiveStop?: () => void;
 }
@@ -188,17 +196,242 @@ function ErrorDetails({
 export interface TerminalPanelHandle {
   /** Focus the console input row (Terminal tab) if it is rendered. */
   focusConsole: () => void;
+  /** Clear the live terminal canvas (like Ctrl+L) without stopping the program. */
+  clearLive: () => void;
+}
+
+/** Pad the xterm canvas to the app's editor palette. */
+const DARK_THEME = {
+  background: '#0d1424',
+  foreground: '#e6eaf2',
+  cursor: '#e6eaf2',
+  cursorAccent: '#0d1424',
+  selectionBackground: '#33415f',
+  black: '#0c1222',
+  red: '#f87171',
+  green: '#4ade80',
+  yellow: '#facc15',
+  blue: '#60a5fa',
+  magenta: '#c084fc',
+  cyan: '#22d3ee',
+  white: '#e6eaf2',
+  brightBlack: '#6d7a93',
+  brightRed: '#f87171',
+  brightGreen: '#4ade80',
+  brightYellow: '#facc15',
+  brightBlue: '#60a5fa',
+  brightMagenta: '#c084fc',
+  brightCyan: '#22d3ee',
+  brightWhite: '#ffffff',
+};
+
+const LIGHT_THEME = {
+  background: '#ffffff',
+  foreground: '#0c1222',
+  cursor: '#0c1222',
+  cursorAccent: '#ffffff',
+  selectionBackground: '#d9e0ea',
+  black: '#0c1222',
+  red: '#dc2626',
+  green: '#16a34a',
+  yellow: '#ca8a04',
+  blue: '#2563eb',
+  magenta: '#9333ea',
+  cyan: '#0891b2',
+  white: '#4a5772',
+  brightBlack: '#7e8da5',
+  brightRed: '#dc2626',
+  brightGreen: '#16a34a',
+  brightYellow: '#ca8a04',
+  brightBlue: '#2563eb',
+  brightMagenta: '#9333ea',
+  brightCyan: '#0891b2',
+  brightWhite: '#0c1222',
+};
+
+/** Number of decoded bytes a base64 string represents. */
+function byteCountOfB64(b64: string): number {
+  const s = b64.replace(/=+$/, '');
+  return Math.floor((s.length * 3) / 4);
+}
+
+/** The byte tail of a base64 stream starting at `startByte`, aligned to a
+ *  3-byte boundary (base64 always encodes whole 3-byte groups). */
+function tailBytesOfB64(b64: string, startByte: number): Uint8Array {
+  const safeStart = startByte - (startByte % 3);
+  const tail = atob(b64.slice((safeStart * 4) / 3));
+  const bytes = new Uint8Array(tail.length);
+  for (let i = 0; i < tail.length; i++) bytes[i] = tail.charCodeAt(i);
+  return startByte - safeStart > 0 ? bytes.subarray(startByte - safeStart) : bytes;
+}
+
+/** UTF-8-safe base64 for terminal input (xterm may pass non-Latin1 text). */
+function utf8Base64(str: string): string {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
 }
 
 export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>(
-  function TerminalPanel({ execution, isRunning, hasErrors, tab: externalTab, onTabChange, activeLanguage, fileContent, onGoToLine, onApplyFix, inputLines, onInputLinesChange, consoleRef, onFocusConsole, onInputReady, onAllLinesCommitted, onClear, liveOutput, liveActive, onLiveSubmit, onLiveStop }, ref) {
+  function TerminalPanel({ execution, isRunning, hasErrors, tab: externalTab, onTabChange, activeLanguage, fileContent, onGoToLine, onApplyFix, inputLines, onInputLinesChange, consoleRef, onFocusConsole, onInputReady, onAllLinesCommitted, onClear, liveOutputB64, liveTruncated, liveActive, onRawInput, onResize, onLiveStop }, ref) {
   const internalConsoleRef = useRef<ConsoleInputHandle>(null);
   const consoleRefResolved = consoleRef ?? internalConsoleRef;
   const { t } = useI18n();
+  const { theme } = useTheme();
   const [internalTab, setInternalTab] = useState<PanelTab>('terminal');
   const tab = externalTab ?? internalTab;
   const setTab = onTabChange ?? setInternalTab;
   const [copied, setCopied] = useState(false);
+
+  /** xterm instance + fit addon, created/owned while a live session runs. */
+  const termRef = useRef<Terminal | null>(null);
+  const fitRef = useRef<FitAddon | null>(null);
+  const termHostRef = useRef<HTMLDivElement | null>(null);
+  const pendingDisposablesRef = useRef<{ dispose(): void }[]>([]);
+  /** Number of stream bytes already written to the canvas. */
+  const consumedBytesRef = useRef(0);
+  /** Latest full stream (bytes Base64) — read by callbacks that must not
+   *  depend on the poll prop (clear / reopen). */
+  const liveStreamRef = useRef('');
+  /** Coalesced keystroke buffer flushed to onRawInput on a short timer. */
+  const pendingInputRef = useRef('');
+  const inputFlushTimerRef = useRef<number | null>(null);
+  const rawInputRef = useRef(onRawInput);
+  const resizeRef = useRef(onResize);
+  const resizeTimerRef = useRef<number | null>(null);
+  rawInputRef.current = onRawInput;
+  resizeRef.current = onResize;
+  liveStreamRef.current = liveOutputB64 ?? '';
+
+  const disposeTerminal = useCallback(() => {
+    if (inputFlushTimerRef.current != null) window.clearTimeout(inputFlushTimerRef.current);
+    if (resizeTimerRef.current != null) window.clearTimeout(resizeTimerRef.current);
+    inputFlushTimerRef.current = null;
+    resizeTimerRef.current = null;
+    pendingDisposablesRef.current.forEach((d) => d.dispose());
+    pendingDisposablesRef.current = [];
+    fitRef.current?.dispose();
+    fitRef.current = null;
+    termRef.current?.dispose();
+    termRef.current = null;
+  }, []);
+
+  /** Create the terminal when a live session starts (or the tab hosting it
+   *  changes) and dispose it when the session ends. A fresh terminal always
+   *  replays the full accumulated stream.
+   *
+   *  Two panels can be mounted (desktop + mobile output tab) but only one is
+   *  visible — the host may be zero-sized. We never open xterm into a hidden
+   *  host: creation is visibility-gated, and a ResizeObserver both keeps the
+   *  canvas sized (fit) and lazily creates the terminal the moment the host
+   *  actually becomes visible. */
+  useEffect(() => {
+    if (!liveActive) return;
+    const host = termHostRef.current;
+    if (!host) return;
+
+    const isVisible = () => host.clientWidth > 0 && host.clientHeight > 0;
+    const createTerminal = () => {
+      if (termRef.current || !isVisible()) return;
+      const dark = document.documentElement.classList.contains('dark');
+      const term = new Terminal({
+        allowProposedApi: true,
+        cursorBlink: true,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: 13,
+        lineHeight: 1.4,
+        scrollback: 5000,
+        theme: dark ? DARK_THEME : LIGHT_THEME,
+      });
+      const fit = new FitAddon();
+      term.loadAddon(fit);
+      term.open(host);
+      try {
+        fit.fit();
+      } catch {
+        /* hidden / zero-sized host */
+      }
+      termRef.current = term;
+      fitRef.current = fit;
+
+      // Replay everything accumulated so far into the fresh canvas.
+      const stream = liveStreamRef.current;
+      if (stream) {
+        try {
+          term.write(tailBytesOfB64(stream, 0));
+        } catch {
+          /* malformed stream — wait for the next poll */
+        }
+        consumedBytesRef.current = byteCountOfB64(stream);
+      } else {
+        consumedBytesRef.current = 0;
+      }
+
+      const flushInput = () => {
+        inputFlushTimerRef.current = null;
+        const data = pendingInputRef.current;
+        if (!data) return;
+        pendingInputRef.current = '';
+        rawInputRef.current?.(utf8Base64(data));
+      };
+      const dataDisposable = term.onData((data) => {
+        pendingInputRef.current += data;
+        if (inputFlushTimerRef.current == null) {
+          inputFlushTimerRef.current = window.setTimeout(flushInput, 90);
+        }
+      });
+      const resizeDisposable = term.onResize(({ rows, cols }) => {
+        if (resizeTimerRef.current != null) window.clearTimeout(resizeTimerRef.current);
+        resizeTimerRef.current = window.setTimeout(() => resizeRef.current?.(rows, cols), 150);
+      });
+      pendingDisposablesRef.current = [dataDisposable, resizeDisposable];
+    };
+
+    const ro = new ResizeObserver(() => {
+      if (termRef.current) {
+        try {
+          fitRef.current?.fit();
+        } catch {
+          /* hidden / zero-sized host */
+        }
+      } else {
+        createTerminal();
+      }
+    });
+    ro.observe(host);
+    createTerminal();
+
+    return () => {
+      ro.disconnect();
+      disposeTerminal();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveActive, tab, theme]);
+
+  /** Stream only the NEW bytes from each poll into the canvas. */
+  useEffect(() => {
+    if (!liveActive) return;
+    const stream = liveStreamRef.current;
+    if (!stream) return;
+    const total = byteCountOfB64(stream);
+    const term = termRef.current;
+    if (!term) return;
+    if (total < consumedBytesRef.current) {
+      // Stream shrank (new session on a reused canvas) — redraw from zero.
+      consumedBytesRef.current = 0;
+      term.reset();
+    }
+    if (total > consumedBytesRef.current) {
+      try {
+        term.write(tailBytesOfB64(stream, consumedBytesRef.current));
+      } catch {
+        /* ignore a malformed slice — next poll will resync */
+      }
+      consumedBytesRef.current = total;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveOutputB64, liveActive]);
 
   useImperativeHandle(
     ref,
@@ -209,50 +442,13 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
           consoleRefResolved.current?.focus();
         }, 60);
       },
+      clearLive: () => {
+        termRef.current?.reset();
+        consumedBytesRef.current = byteCountOfB64(liveStreamRef.current);
+      },
     }),
     [consoleRefResolved, setTab],
   );
-
-  /** Live mode renders one continuous stream — program stdout interleaved
-   *  with the echoed input right after each prompt, like a real terminal. */
-  type LivePart = { text: string; kind: 'out' | 'in' };
-  const [liveParts, setLiveParts] = useState<LivePart[]>([]);
-  /** Amount of the latest liveOutput prop already replayed into liveParts. */
-  const consumedLenRef = useRef(0);
-
-  // Reset the transcript whenever a live session (re)starts.
-  useEffect(() => {
-    if (!liveActive) return;
-    const initial = liveOutput ?? '';
-    consumedLenRef.current = initial.length;
-    setLiveParts(initial ? [{ text: initial, kind: 'out' }] : []);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveActive]);
-
-  // Append only the NEW stdout since the last poll/submit.
-  useEffect(() => {
-    if (!liveActive) return;
-    const out = liveOutput ?? '';
-    if (out.length > consumedLenRef.current) {
-      const delta = out.slice(consumedLenRef.current);
-      consumedLenRef.current = out.length;
-      setLiveParts((prev) => (delta ? [...prev, { text: delta, kind: 'out' }] : prev));
-    }
-  }, [liveOutput, liveActive]);
-
-  /** Forward a typed line to the running program and echo it inline. */
-  const submitLive = (line: string) => {
-    setLiveParts((prev) => [...prev, { text: line + '\n', kind: 'in' }]);
-    onLiveSubmit?.(line);
-  };
-
-  /** Keep the caret visible: follow the stream as new output arrives. */
-  const liveScrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!liveActive) return;
-    const el = liveScrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [liveActive, liveParts]);
 
   const stdout = execution?.stdout ?? '';
   const stderr = execution?.stderr ?? '';
@@ -281,8 +477,8 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
   /** Errors tab still shows the raw EOFError detail if the user wants it. */
   const errorDetailsExecution = waitingForInput ? null : execution;
 
-  // Like a real terminal: the moment the program waits for input,
-  // the caret jumps to the prompt row.
+  // Like a real terminal: the moment a past run waits for input, the caret
+  // jumps to the prompt row.
   useEffect(() => {
     if (waitingForInput) {
       consoleRefResolved.current?.focus();
@@ -290,17 +486,24 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
     }
   }, [waitingForInput, consoleRefResolved, onInputReady]);
 
-  // Live interactive sessions: focus the console input right away and keep
-  // it focused as output streams in, so the user can type without clicking.
-  // onInputReady also pulls mobile back to a tab that shows the input row.
+  // Live sessions: grab the xterm focus (the canvas itself is the input). Ask
+  // the parent to surface the terminal exactly once per session — not on every
+  // poll tick, or mobile would be trapped on the terminal tab.
+  const inputReadyFiredRef = useRef(false);
   useEffect(() => {
-    if (!liveActive) return;
+    if (!liveActive) {
+      inputReadyFiredRef.current = false;
+      return;
+    }
     const timer = window.setTimeout(() => {
-      consoleRefResolved.current?.focus();
-      onInputReady?.();
+      termRef.current?.focus();
+      if (!inputReadyFiredRef.current) {
+        inputReadyFiredRef.current = true;
+        onInputReady?.();
+      }
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [liveActive, liveOutput, consoleRefResolved, onInputReady]);
+  }, [liveActive, onInputReady]);
 
   /** All prompts the program will print, in order. */
   const allPrompts = useMemo(
@@ -357,10 +560,28 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
     </div>
   ) : null;
 
+  /** Live frame used by the Terminal and Output tabs: the xterm canvas.
+   *  Only one tab is mounted at a time, so the shared host ref points at the
+   *  visible one and the open-effect re-runs on tab switches. */
+  const liveFrame = (
+    <div className="flex h-full min-h-0 flex-col">
+      <div ref={termHostRef} className="min-h-0 flex-1 overflow-hidden bg-editor px-3 py-3" />
+      {(liveTruncated || execution?.truncated) && (
+        <div className="m-3 mt-0 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] leading-snug text-mute">
+          <span className="flex items-start gap-1.5">
+            <Icon name="alertTriangle" size={14} className="mt-0.5 shrink-0 text-warning" />
+            <span>{t('terminal.truncated')}</span>
+          </span>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-panel">
-      <div className="flex items-center justify-between border-b border-edge pr-1.5 lg:pr-2">
+      <div className="flex min-w-0 items-center justify-between border-b border-edge pr-1 lg:pr-2">
         <Tabs<PanelTab>
+          className="min-w-0 flex-1"
           tabs={[
             { value: 'output', label: t('terminal.output'), icon: 'terminal' },
             { value: 'errors', label: t('terminal.errors'), icon: 'alertCircle', badge: hasErrors ? 1 : 0 },
@@ -396,7 +617,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
           >
             <Icon name="trash" size={15} />
           </Button>
-          <Button variant="ghost" size="icon" onClick={handleCopy} aria-label="Copy output">
+          <Button variant="ghost" size="icon" onClick={handleCopy} aria-label={t('terminal.copy_output')}>
             <Icon name={copied ? 'check' : 'copy'} size={15} />
           </Button>
         </div>
@@ -404,91 +625,79 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
 
       <div className="min-h-0 flex-1 overflow-hidden">
         {tab === 'terminal' ? (
-          <div className="flex h-full min-h-0 flex-col">
-            <div ref={liveScrollRef} className="min-h-0 flex-1 overflow-auto bg-editor px-4 py-3.5 font-mono text-[15px] leading-relaxed scrollbar-thin lg:px-4 lg:py-3 lg:text-[13px]">
-              {isRunning && !liveActive && (
-                <div className="flex items-center gap-2 text-info">
-                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-info border-t-transparent" />
-                  <span>{t('terminal.compiling')}</span>
-                </div>
-              )}
+          liveActive ? (
+            liveFrame
+          ) : (
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="min-h-0 flex-1 overflow-auto bg-editor px-4 py-3.5 font-mono text-[15px] leading-relaxed scrollbar-thin lg:px-4 lg:py-3 lg:text-[13px]">
+                {isRunning && (
+                  <div className="flex items-center gap-2 text-info">
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-info border-t-transparent" />
+                    <span>{t('terminal.compiling')}</span>
+                  </div>
+                )}
 
-              {liveActive ? (
-                <div className="whitespace-pre-wrap text-ink">
-                  {liveParts.map((part, i) => (
-                    <span key={i}>{part.text}</span>
-                  ))}
-                  <span className="mt-2 block text-[10px] font-semibold uppercase tracking-wider text-faint">
-                    {t('terminal.console_label')}
-                  </span>
-                  <ConsoleInput
-                    key="live-console"
-                    ref={consoleRef}
-                    code={fileContent ?? ''}
-                    language={activeLanguage ?? 'c'}
-                    lines={inputLines}
-                    onLinesChange={onInputLinesChange}
-                    running={false}
-                    disabled={false}
-                    echoFrom={0}
-                    live={onLiveSubmit ? { onSubmit: submitLive } : undefined}
-                  />
-                </div>
-              ) : (
-                <>
-                  {session ? (
-                    <TerminalSession segments={session} />
-                  ) : (
-                    stdout && <pre className="whitespace-pre-wrap text-ink">{stdout}</pre>
-                  )}
+                {session ? (
+                  <TerminalSession segments={session} />
+                ) : (
+                  stdout && <pre className="whitespace-pre-wrap text-ink">{stdout}</pre>
+                )}
 
-                  {stderr && !waitingForInput && (
-                    <div className="mt-2">
-                      <BilingualErrorTitle
-                        status={effectiveStatus}
-                        line={explainError(stderr, execution?.status, activeLanguage ?? execution?.language?.slug)?.line}
-                        onGoToLine={onGoToLine}
-                      />
-                      <ErrorDetails
-                        execution={errorDetailsExecution}
-                        activeLanguage={activeLanguage}
-                        fileContent={fileContent}
-                        onGoToLine={onGoToLine}
-                        onApplyFix={onApplyFix}
-                        onFocusConsole={onFocusConsole}
-                      />
-                    </div>
-                  )}
+                {execution?.truncated && (
+                  <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] leading-snug text-mute">
+                    <span className="flex items-start gap-1.5">
+                      <Icon name="alertTriangle" size={14} className="mt-0.5 shrink-0 text-warning" />
+                      <span>{t('terminal.truncated')}</span>
+                    </span>
+                  </div>
+                )}
 
-                  {/* Inline prompt: type right here in the terminal, like VS Code.
-                      The console stays empty until a run happens — the prompt row
-                      only appears once the program has run (and asks for input).
-                      Hidden while a run is in flight — only the spinner shows. */}
-                  {!consoleHidden && !isRunning && !!execution && (
-                    <div className="mt-2.5">
-                      <label className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-mute">
-                        <Icon name="keyboard" size={12} className="text-faint" />
-                        {t('terminal.console_label')}
-                      </label>
-                      <ConsoleInput
-                        key="session-console"
-                        ref={consoleRef}
-                        code={fileContent ?? ''}
-                        language={activeLanguage ?? 'python'}
-                        lines={inputLines}
-                        onLinesChange={onInputLinesChange}
-                        running={isRunning}
-                        disabled={isRunning}
-                        echoFrom={session && !waitingForInput ? answeredCount : 0}
-                        onAllLinesCommitted={onAllLinesCommitted}
-                      />
-                    </div>
-                  )}
+                {stderr && !waitingForInput && (
+                  <div className="mt-2">
+                    <BilingualErrorTitle
+                      status={effectiveStatus}
+                      line={explainError(stderr, execution?.status, activeLanguage ?? execution?.language?.slug)?.line}
+                      onGoToLine={onGoToLine}
+                    />
+                    <ErrorDetails
+                      execution={errorDetailsExecution}
+                      activeLanguage={activeLanguage}
+                      fileContent={fileContent}
+                      onGoToLine={onGoToLine}
+                      onApplyFix={onApplyFix}
+                      onFocusConsole={onFocusConsole}
+                    />
+                  </div>
+                )}
+
+                {/* Inline prompt: type right here in the terminal, like VS Code.
+                    The console stays empty until a run happens — the prompt row
+                    only appears once the program has run (and asks for input).
+                    Hidden while a run is in flight — only the spinner shows. */}
+                {!consoleHidden && !isRunning && !!execution && (
+                  <div className="mt-2.5">
+                    <label className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-mute">
+                      <Icon name="keyboard" size={12} className="text-faint" />
+                      {t('terminal.console_label')}
+                    </label>
+                    <ConsoleInput
+                      key="session-console"
+                      ref={consoleRef}
+                      code={fileContent ?? ''}
+                      language={activeLanguage ?? 'python'}
+                      lines={inputLines}
+                      onLinesChange={onInputLinesChange}
+                      running={isRunning}
+                      disabled={isRunning}
+                      echoFrom={session && !waitingForInput ? answeredCount : 0}
+                      onAllLinesCommitted={onAllLinesCommitted}
+                    />
+                  </div>
+                )}
                 {runSummary}
-                </>
-              )}
+              </div>
             </div>
-          </div>
+          )
         ) : tab === 'errors' ? (
           <div className="h-full overflow-auto bg-editor px-4 py-3 font-mono text-[15px] leading-relaxed scrollbar-thin lg:py-3 lg:text-[13px]">
             {isRunning && (
@@ -536,36 +745,28 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
             )}
           </div>
         ) : (
-          <div ref={liveScrollRef} className="h-full overflow-auto bg-editor px-4 py-3 font-mono text-[15px] leading-relaxed scrollbar-thin lg:py-3 lg:text-[13px]">
-            {isRunning && !liveActive && (
-              <div className="flex items-center gap-2 text-info">
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-info border-t-transparent" />
-                <span>{t('terminal.compiling')}</span>
-              </div>
-            )}
+          liveActive ? (
+            liveFrame
+          ) : (
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="min-h-0 flex-1 overflow-auto bg-editor px-4 py-3 font-mono text-[15px] leading-relaxed scrollbar-thin lg:py-3 lg:text-[13px]">
+                {isRunning && (
+                  <div className="flex items-center gap-2 text-info">
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-info border-t-transparent" />
+                    <span>{t('terminal.compiling')}</span>
+                  </div>
+                )}
 
-            {liveActive ? (
-              <div className="whitespace-pre-wrap text-ink">
-                {liveParts.map((part, i) => (
-                  <span key={i}>{part.text}</span>
-                ))}
-                <ConsoleInput
-                  key="live-console"
-                  ref={consoleRef}
-                  code={fileContent ?? ''}
-                  language={activeLanguage ?? 'c'}
-                  lines={inputLines}
-                  onLinesChange={onInputLinesChange}
-                  running={false}
-                  disabled={false}
-                  echoFrom={0}
-                  live={onLiveSubmit ? { onSubmit: submitLive } : undefined}
-                />
-              </div>
-            ) : (
-              <>
                 {stdout && (
                   <pre className="whitespace-pre-wrap text-ink">{stdout}</pre>
+                )}
+                {execution?.truncated && (
+                  <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] leading-snug text-mute">
+                    <span className="flex items-start gap-1.5">
+                      <Icon name="alertTriangle" size={14} className="mt-0.5 shrink-0 text-warning" />
+                      <span>{t('terminal.truncated')}</span>
+                    </span>
+                  </div>
                 )}
                 {execution && !isRunning && sentStdin && (
                   <div className="mt-3 rounded-md border border-edge bg-raised/60 px-3 py-2 text-[12px] text-mute">
@@ -587,9 +788,9 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
                 )}
 
                 {runSummary}
-              </>
-            )}
+              </div>
             </div>
+          )
         )}
       </div>
     </div>

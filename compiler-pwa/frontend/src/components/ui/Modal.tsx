@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { Icon } from './Icon';
+import { useI18n } from '../../i18n';
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'full';
 
@@ -25,6 +26,7 @@ export function Modal({
   size?: ModalSize;
   hideClose?: boolean;
 }) {
+  const { t } = useI18n();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -75,7 +77,7 @@ export function Modal({
               <button
                 onClick={onClose}
                 className="rounded-md p-1.5 text-faint transition-colors hover:bg-raised hover:text-ink"
-                aria-label="Close"
+                aria-label={t('general.close')}
               >
                 <Icon name="x" size={18} />
               </button>

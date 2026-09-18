@@ -54,7 +54,7 @@ export function StatusBar({
         {fileName && <span className="hidden truncate font-mono md:inline">{fileName}</span>}
         <span className="hidden items-center gap-1.5 lg:inline-flex">
           <Icon name="file" size={12} className="text-faint" />
-          {fileCount} {fileCount === 1 ? 'file' : 'files'}
+          {fileCount} {fileCount === 1 ? t('dashboard.file') : t('dashboard.files_suffix')}
         </span>
       </div>
 
@@ -66,7 +66,7 @@ export function StatusBar({
               <Icon name="globe" size={12} className="text-faint" />
               {t('statusbar.utf8')}
             </span>
-            <span className="hidden items-center gap-1.5 sm:inline-flex" title="Indentation">
+            <span className="hidden items-center gap-1.5 sm:inline-flex" title={t('statusbar.indentation')}>
               <Icon name="minus" size={12} className="text-faint" />
               {t('statusbar.spaces', { n: prefs.tabSize })}
             </span>

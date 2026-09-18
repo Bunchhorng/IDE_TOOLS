@@ -53,8 +53,11 @@ class ExecutionService
             'exit_code' => $result['exit_code'],
             'execution_time' => $result['execution_time'],
         ]);
-        // Transient flag the resource exposes so callers stop polling when done.
+        // Transient flags the resource exposes so callers stop polling when done.
         $execution->interactive_finished = $result['interactive_finished'] ?? false;
+        $execution->truncated = $result['truncated'] ?? false;
+        // Raw PTY stream (base64) for the live xterm canvas — never persisted.
+        $execution->output_b64 = $result['output_b64'] ?? null;
     }
 
     /**
@@ -85,6 +88,9 @@ class ExecutionService
                 'execution_time' => $result['execution_time'],
                 'memory_usage' => $result['memory_usage'],
             ]);
+
+            // Transient (non-column) flag the resource surfaces for truncation UI.
+            $execution->truncated = $result['truncated'] ?? false;
 
             Log::info('Execution completed', [
                 'execution_id' => $execution->id,

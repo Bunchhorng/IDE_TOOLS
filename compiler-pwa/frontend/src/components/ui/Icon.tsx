@@ -69,6 +69,7 @@ export type IconName =
   | 'mobile'
   | 'c'
   | 'lock'
+  | 'mail'
   | 'cursor';
 
 type IconProps = SVGProps<SVGSVGElement> & {
@@ -387,6 +388,10 @@ const JSX: Record<IconName, ReactNode[]> = {
   lock: [
     <rect key="a" x="3" y="11" width="18" height="11" rx="2" ry="2" />,
     <path key="b" d="M7 11V7a5 5 0 0 1 10 0v4" />,
+  ],
+  mail: [
+    <rect key="a" x="2" y="4" width="20" height="16" rx="2" ry="2" />,
+    <path key="b" d="m22 6-10 7L2 6" />,
   ],
   cursor: [
     <path key="a" d="M9 3h6M12 3v18M9 21h6" />,

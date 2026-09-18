@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons/*.png'],
       manifest: {
-        name: 'CodeRunner - Online Compiler',
-        short_name: 'CodeRunner',
+        name: 'ETEC STUDIO - Online Compiler',
+        short_name: 'ETEC STUDIO',
         description: 'Write, compile, and execute code online',
         theme_color: '#0b1120',
         background_color: '#0b1120',

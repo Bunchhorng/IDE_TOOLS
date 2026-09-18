@@ -22,7 +22,10 @@ export function Tabs<V extends string>({
   return (
     <div
       role="tablist"
-      className={cn('flex items-center gap-0.5 border-b border-edge px-2 py-1.5', className)}
+      className={cn(
+        'no-scrollbar flex min-w-0 items-center gap-0.5 overflow-x-auto border-b border-edge px-2 py-1.5',
+        className,
+      )}
     >
       {tabs.map((tab) => {
         const active = tab.value === value;
@@ -33,7 +36,7 @@ export function Tabs<V extends string>({
             aria-selected={active}
             onClick={() => onChange(tab.value)}
             className={cn(
-              'relative flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors',
+              'relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors',
               active ? 'bg-primary/10 text-primary' : 'text-mute hover:bg-raised hover:text-ink',
             )}
           >

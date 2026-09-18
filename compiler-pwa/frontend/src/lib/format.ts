@@ -1,16 +1,18 @@
-export function timeAgo(date: string | Date): string {
+export type TimeAgoT = (key: string, vars?: Record<string, string | number>) => string;
+
+export function timeAgo(date: string | Date, t?: TimeAgoT): string {
   const then = new Date(date).getTime();
   const diff = Date.now() - then;
   const sec = Math.floor(diff / 1000);
-  if (sec < 45) return 'just now';
+  if (sec < 45) return t?.('format.just_now') ?? 'just now';
   const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
+  if (min < 60) return t ? t('format.min_ago', { n: min }) : `${min}m ago`;
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
+  if (hr < 24) return t ? t('format.hr_ago', { n: hr }) : `${hr}h ago`;
   const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}d ago`;
+  if (day < 7) return t ? t('format.day_ago', { n: day }) : `${day}d ago`;
   const wk = Math.floor(day / 7);
-  if (wk < 5) return `${wk}w ago`;
+  if (wk < 5) return t ? t('format.wk_ago', { n: wk }) : `${wk}w ago`;
   return new Date(date).toLocaleDateString();
 }
 

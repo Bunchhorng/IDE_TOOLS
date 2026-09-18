@@ -1,5 +1,5 @@
 import api from './api';
-import type { Execution, ExecuteRequest, InteractiveInputRequest, ApiResponse } from '../types';
+import type { Execution, ExecuteRequest, InteractiveInputRequest, InteractiveSignalRequest, ApiResponse } from '../types';
 
 export const executionService = {
   async execute(data: ExecuteRequest): Promise<ApiResponse<Execution>> {
@@ -14,6 +14,11 @@ export const executionService = {
 
   async sendInteractiveInput(id: number, data: InteractiveInputRequest): Promise<ApiResponse<Execution>> {
     const response = await api.post(`/executions/${id}/interactive/input`, data);
+    return response.data;
+  },
+
+  async sendInteractiveSignal(id: number, data: InteractiveSignalRequest): Promise<ApiResponse<Execution>> {
+    const response = await api.post(`/executions/${id}/interactive/signal`, data);
     return response.data;
   },
 
@@ -37,6 +42,11 @@ export const executionService = {
     return response.data;
   },
 
+  async deleteAll(): Promise<ApiResponse<{ deleted: number }>> {
+    const response = await api.delete('/executions');
+    return response.data;
+  },
+
   async pollStatus(id: number, maxAttempts = 200): Promise<Execution> {
     for (let i = 0; i < maxAttempts; i++) {
       const response = await this.getById(id);
@@ -44,7 +54,12 @@ export const executionService = {
       if (execution.status !== 'queued' && execution.status !== 'running') {
         return execution;
       }
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Adaptive backoff: a queued job cannot start sooner no matter how
+      // fast we poll — during a classroom spike (everyone clicks Run at
+      // once) polling slowly while queued cuts API load ~3x with no UX
+      // cost. Once running, poll fast so results feel instant.
+      const delay = execution.status === 'queued' ? 1500 : 400;
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
     throw new Error('Execution polling timeout');
   },

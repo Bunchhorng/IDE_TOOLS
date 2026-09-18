@@ -7,10 +7,10 @@ export function Logo({ size = 'md', withText = true, className }: { size?: 'sm' 
 
   return (
     <span className={cn('inline-flex items-center gap-2.5', className)}>
-      <img src={logoUrl} alt="CodeRunner logo" className={cn('shrink-0 rounded-lg object-contain', box)} />
+      <img src={logoUrl} alt="ETEC STUDIO logo" className={cn('shrink-0 rounded-lg object-contain', box)} />
       {withText && (
         <span className={cn('font-semibold tracking-tight text-ink', text)}>
-          Code<span className="text-primary">Runner</span>
+          ETEC <span className="text-primary">STUDIO</span>
         </span>
       )}
     </span>

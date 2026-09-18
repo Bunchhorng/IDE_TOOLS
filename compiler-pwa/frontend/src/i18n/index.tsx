@@ -1,5 +1,7 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { translations, type Locale, type TranslationKey } from './translations';
+
+export type { Locale, TranslationKey } from './translations';
 
 interface I18nContextValue {
   locale: Locale;
@@ -14,6 +16,10 @@ function getInitial(): Locale {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === 'en' || stored === 'km') return stored;
   } catch { /* SSR / private mode */ }
+  try {
+    const lang = navigator.language?.toLowerCase() ?? '';
+    if (lang.startsWith('km')) return 'km';
+  } catch { /* unavailable */ }
   return 'en';
 }
 
@@ -21,6 +27,12 @@ const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(getInitial);
+
+  // Keep <html lang> in sync so screen readers, spellcheckers and font fallback
+  // (e.g. Khmer-capable fonts) follow the selected UI language.
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);

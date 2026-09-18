@@ -1342,7 +1342,7 @@ Use `.env`.
 Examples:
 
 ```env
-APP_NAME=CodeRunner
+APP_NAME="ETEC STUDIO"
 
 DB_CONNECTION=mysql
 DB_HOST=mysql

@@ -97,6 +97,10 @@ export function useInstallPrompt() {
   const isStandalone =
     typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)').matches;
   const canInstall = !installed && !isStandalone && (isIOS || supportsPWA);
+  // Chrome fires `beforeinstallprompt` ONLY on secure contexts. On plain http
+  // (e.g. http://<lan-ip>) the prompt can never appear — the UI uses this to
+  // explain that instead of a generic "blocked" toast.
+  const isSecure = typeof window !== 'undefined' && window.isSecureContext === true;
 
-  return { canInstall, canPrompt: !!(deferredPrompt ?? modulePrompt), isIOS, installed, install };
+  return { canInstall, canPrompt: !!(deferredPrompt ?? modulePrompt), isIOS, installed, isSecure, install };
 }

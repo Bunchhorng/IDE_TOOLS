@@ -10,6 +10,7 @@ import { LanguageIcon } from '../../components/LanguageIcon';
 import { projectService } from '../../services/projectService';
 import { fileService } from '../../services/fileService';
 import { useToast } from '../../context/ToastContext';
+import { useI18n, type TranslationKey } from '../../i18n';
 
 const LANG_EXTS: Record<string, { ext: string; glyph: 'c' | 'cpp' | 'python' }> = {
   c: { ext: 'main.c', glyph: 'c' },
@@ -17,9 +18,17 @@ const LANG_EXTS: Record<string, { ext: string; glyph: 'c' | 'cpp' | 'python' }> 
   python: { ext: 'main.py', glyph: 'python' },
 };
 
+const TEMPLATE_KEYS: Record<TemplateId, { label: TranslationKey; desc: TranslationKey }> = {
+  empty: { label: 'template.empty', desc: 'template.empty_desc' },
+  hello: { label: 'template.hello_world', desc: 'template.hello_world_desc' },
+  basic: { label: 'template.basic', desc: 'template.basic_desc' },
+  competitive: { label: 'template.competitive', desc: 'template.competitive_desc' },
+};
+
 export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
   const toast = useToast();
+  const { t } = useI18n();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -38,7 +47,7 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      setError('Give your project a name.');
+      setError(t('new_project.name_required'));
       return;
     }
     setSubmitting(true);
@@ -52,13 +61,13 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
       } catch {
         /* file creation is optional; keep project only */
       }
-      toast.success('Project created', `${project.name}`);
+      toast.success(t('toast.project_created'), `${project.name}`);
       onClose();
       navigate(`/editor/${project.id}`);
     } catch (err: unknown) {
       setError(
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-          'Could not create the project.',
+          t('new_project.create_failed'),
       );
     } finally {
       setSubmitting(false);
@@ -69,31 +78,31 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
     <Modal
       open={open}
       onClose={onClose}
-      title="New project"
-      description="Scaffold a project with a starter file and template."
+      title={t('new_project.title')}
+      description={t('new_project.desc')}
       size="md"
     >
       <form onSubmit={submit} className="flex flex-col gap-5">
         <Input
-          label="Project name"
+          label={t('new_project.name_label')}
           value={name}
           onChange={(e) => {
             setName(e.target.value);
             setError('');
           }}
-          placeholder="My project"
+          placeholder={t('new_project.name_placeholder')}
           autoFocus
           error={error}
         />
         <Input
-          label="Description (optional)"
+          label={t('new_project.desc_label')}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="What are you building?"
+          placeholder={t('new_project.desc_placeholder')}
         />
 
         <div>
-          <p className="mb-1.5 text-[13px] font-medium text-ink">Language</p>
+          <p className="mb-1.5 text-[13px] font-medium text-ink">{t('new_project.lang_label')}</p>
           <div className="grid grid-cols-3 gap-2">
             {Object.entries(LANG_EXTS).map(([slug, info]) => {
               const active = language === slug;
@@ -118,15 +127,15 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
         </div>
 
         <div>
-          <p className="mb-1.5 text-[13px] font-medium text-ink">Template</p>
+          <p className="mb-1.5 text-[13px] font-medium text-ink">{t('new_project.template_label')}</p>
           <div className="grid gap-2 sm:grid-cols-2">
-            {TEMPLATES.map((t) => {
-              const active = template === t.id;
+            {TEMPLATES.map((tpl) => {
+              const active = template === tpl.id;
               return (
                 <button
-                  key={t.id}
+                  key={tpl.id}
                   type="button"
-                  onClick={() => setTemplate(t.id)}
+                  onClick={() => setTemplate(tpl.id)}
                   className={cn(
                     'rounded-lg border px-3 py-2.5 text-left transition-colors',
                     active
@@ -135,9 +144,9 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
                   )}
                 >
                   <span className={cn('block text-[13px] font-medium', active ? 'text-primary' : 'text-ink')}>
-                    {t.label}
+                    {t(TEMPLATE_KEYS[tpl.id].label)}
                   </span>
-                  <span className="mt-0.5 block text-[11px] text-mute">{t.description}</span>
+                  <span className="mt-0.5 block text-[11px] text-mute">{t(TEMPLATE_KEYS[tpl.id].desc)}</span>
                 </button>
               );
             })}
@@ -156,11 +165,11 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
-            Cancel
+            {t('new_project.cancel')}
           </Button>
           <Button type="submit" loading={submitting}>
             <Icon name="rocket" size={15} />
-            Create project
+            {t('new_project.create')}
           </Button>
         </div>
       </form>

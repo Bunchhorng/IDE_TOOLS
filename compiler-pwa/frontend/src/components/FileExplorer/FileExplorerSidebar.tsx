@@ -9,6 +9,7 @@ import { Input } from '../ui/Input';
 import { BottomSheet } from '../ui/BottomSheet';
 import { detectLanguage, iconForFile, languageFromFilename } from '../../lib/languages';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useI18n } from '../../i18n';
 import type { File, Folder } from '../../types';
 
 interface FileExplorerSidebarProps {
@@ -70,6 +71,7 @@ export function FileExplorerSidebar({
   onMoveFolder,
 }: FileExplorerSidebarProps) {
   const isMobile = useMediaQuery('(max-width: 1023px)');
+  const { t } = useI18n();
 
   const [creating, setCreating] = useState<CreateMode>(null);
   const [newName, setNewName] = useState('');
@@ -129,7 +131,7 @@ export function FileExplorerSidebar({
 
   /** Folders a node could move into, excluding itself and (for folders) its subtree. */
   const moveTargets = (kind: 'file' | 'folder', node: File | Folder): MoveTarget[] => {
-    const targets: MoveTarget[] = [{ label: 'Project root', id: null, isRoot: true, current: false }];
+    const targets: MoveTarget[] = [{ label: t('explorer.project_root'), id: null, isRoot: true, current: false }];
     const blocked = new Set<number>();
 
     if (kind === 'folder') {
@@ -244,22 +246,22 @@ export function FileExplorerSidebar({
     const items: MenuItem[] =
       kind === 'folder'
         ? [
-            { key: 'new-file', label: 'New file', icon: 'filePlus', onSelect: () => startCreate('file', (node as Folder).id) },
+            { key: 'new-file', label: t('explorer.new_file'), icon: 'filePlus', onSelect: () => startCreate('file', (node as Folder).id) },
             {
               key: 'new-folder',
-              label: 'New subfolder',
+              label: t('explorer.new_subfolder'),
               icon: 'folderPlus',
               onSelect: () => startCreate('folder', (node as Folder).id),
             },
           ]
         : [];
 
-    items.push({ key: 'rename', label: 'Rename', icon: 'pencil', onSelect: () => startRename(kind, node) });
+    items.push({ key: 'rename', label: t('explorer.rename'), icon: 'pencil', onSelect: () => startRename(kind, node) });
 
     if (isMobile) {
-      items.push({ key: 'move', label: 'Move to…', icon: 'folder', onSelect: () => setSheet({ kind, mode: 'move', node }) });
+      items.push({ key: 'move', label: t('explorer.move_to'), icon: 'folder', onSelect: () => setSheet({ kind, mode: 'move', node }) });
     } else {
-      items.push({ key: 'move-head', label: 'Move to…', icon: 'folder', onSelect: () => {} });
+      items.push({ key: 'move-head', label: t('explorer.move_to'), icon: 'folder', onSelect: () => {} });
       for (const t of moveTargets(kind, node)) {
         items.push({
           key: `move-${kind}-${t.id ?? 'root'}`,
@@ -276,7 +278,7 @@ export function FileExplorerSidebar({
 
     items.push({
       key: 'delete',
-      label: 'Delete',
+      label: t('explorer.delete'),
       icon: 'trash',
       danger: true,
       onSelect: () => {
@@ -293,7 +295,7 @@ export function FileExplorerSidebar({
     isMobile ? (
       <button
         type="button"
-        aria-label={`Options for ${label}`}
+        aria-label={t('explorer.options_for', { name: label })}
         onClick={() => setMenuSheet({ kind, node })}
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-faint transition-colors hover:text-ink active:bg-raised lg:h-6 lg:w-6"
       >
@@ -305,7 +307,7 @@ export function FileExplorerSidebar({
         trigger={
           <button
             type="button"
-            aria-label={`Options for ${label}`}
+            aria-label={t('explorer.options_for', { name: label })}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-faint transition-colors hover:text-ink active:bg-raised lg:h-6 lg:w-6"
           >
             <Icon name="moreV" size={14} />
@@ -418,7 +420,7 @@ export function FileExplorerSidebar({
               type="button"
               onClick={() => toggleFolder(folder.id)}
               className="flex h-5 w-5 shrink-0 items-center justify-center text-faint transition-colors hover:text-ink"
-              aria-label={open ? 'Collapse' : 'Expand'}
+              aria-label={open ? t('explorer.collapse') : t('explorer.expand')}
             >
               <Icon name={open ? 'chevronDown' : 'chevronRight'} size={13} />
             </button>
@@ -467,7 +469,7 @@ export function FileExplorerSidebar({
       <div className="flex items-center justify-between px-3 pt-3 pb-1.5">
         <div className="flex min-w-0 items-center gap-1.5">
           <Icon name="folder" size={13} className="shrink-0 text-primary" />
-          <span className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-faint">Explorer</span>
+          <span className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-faint">{t('explorer.title')}</span>
           <span className="rounded-full bg-mute/10 px-1.5 py-px text-[10px] font-semibold text-mute">
             {folders.length + files.length}
           </span>
@@ -476,16 +478,16 @@ export function FileExplorerSidebar({
           <button
             onClick={() => startCreate('file', null)}
             className="rounded-md p-2 text-faint transition-colors hover:bg-raised hover:text-ink active:bg-raised lg:p-1"
-            aria-label="New file"
-            title="New file"
+            aria-label={t('explorer.new_file')}
+            title={t('explorer.new_file')}
           >
             <Icon name="filePlus" size={17} />
           </button>
           <button
             onClick={() => startCreate('folder', null)}
             className="rounded-md p-2 text-faint transition-colors hover:bg-raised hover:text-ink active:bg-raised lg:p-1"
-            aria-label="New folder"
-            title="New folder"
+            aria-label={t('explorer.new_folder')}
+            title={t('explorer.new_folder')}
           >
             <Icon name="folderPlus" size={17} />
           </button>
@@ -502,12 +504,12 @@ export function FileExplorerSidebar({
         <EmptyState
           compact
           icon="folder"
-          title="No files yet"
-          message="Create your first file or folder to start coding."
+          title={t('explorer.no_files')}
+          message={t('explorer.create_first_folder')}
           action={
             isMobile ? (
               <Button size="sm" variant="primary" onClick={() => startCreate('file', null)}>
-                New file
+                {t('explorer.new_file')}
               </Button>
             ) : undefined
           }
@@ -538,12 +540,12 @@ export function FileExplorerSidebar({
       <BottomSheet
         open={isMobile && sheet?.kind === 'file' && sheet.mode === 'create'}
         onClose={clearSheet}
-        title="New file"
+        title={t('explorer.new_file')}
       >
         <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submitSheet(); }}>
           <Input
-            label="File name"
-            placeholder="notes.txt"
+            label={t('explorer.file_name')}
+            placeholder={t('explorer.file_name_placeholder')}
             autoFocus
             value={sheetName}
             onChange={(e) => {
@@ -562,7 +564,7 @@ export function FileExplorerSidebar({
             enterKeyHint="done"
           />
           <div>
-            <span className="mb-1.5 block text-[13px] font-medium text-ink">Language</span>
+            <span className="mb-1.5 block text-[13px] font-medium text-ink">{t('editor.language')}</span>
             <div className="grid grid-cols-3 gap-2">
               {FILE_LANGS.map((l) => (
                 <button
@@ -584,14 +586,14 @@ export function FileExplorerSidebar({
                 </button>
               ))}
             </div>
-            <p className="mt-1.5 text-xs text-faint">Use any extension — e.g. <code className="rounded bg-raised px-1 py-px text-faint">.txt</code>, <code className="rounded bg-raised px-1 py-px text-faint">.md</code>, <code className="rounded bg-raised px-1 py-px text-faint">.cpp</code>. Pick a language for running the code.</p>
+            <p className="mt-1.5 text-xs text-faint">{t('explorer.extension_hint')}</p>
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="secondary" size="lg" fullWidth onClick={clearSheet}>
-              Cancel
+              {t('explorer.cancel')}
             </Button>
             <Button type="submit" variant="primary" size="lg" fullWidth disabled={!sheetName.trim()}>
-              Create
+              {t('explorer.create')}
             </Button>
           </div>
         </form>
@@ -600,12 +602,12 @@ export function FileExplorerSidebar({
       <BottomSheet
         open={isMobile && sheet?.kind === 'folder' && sheet.mode === 'create'}
         onClose={clearSheet}
-        title="New folder"
+        title={t('explorer.new_folder')}
       >
         <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submitSheet(); }}>
           <Input
-            label="Folder name"
-            placeholder="src"
+            label={t('explorer.folder_name')}
+            placeholder={t('explorer.folder_name_placeholder')}
             autoFocus
             value={sheetName}
             onChange={(e) => setSheetName(e.target.value)}
@@ -616,10 +618,10 @@ export function FileExplorerSidebar({
           />
           <div className="flex gap-2">
             <Button type="button" variant="secondary" size="lg" fullWidth onClick={clearSheet}>
-              Cancel
+              {t('explorer.cancel')}
             </Button>
             <Button type="submit" variant="primary" size="lg" fullWidth disabled={!sheetName.trim()}>
-              Create
+              {t('explorer.create')}
             </Button>
           </div>
         </form>
@@ -628,11 +630,11 @@ export function FileExplorerSidebar({
       <BottomSheet
         open={isMobile && sheet?.mode === 'rename'}
         onClose={clearSheet}
-        title={sheet?.kind === 'file' ? 'Rename file' : 'Rename folder'}
+        title={sheet?.kind === 'file' ? t('explorer.rename_file') : t('explorer.rename_folder')}
       >
         <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submitSheet(); }}>
           <Input
-            label="New name"
+            label={t('explorer.new_name')}
             autoFocus
             value={sheetName}
             onChange={(e) => setSheetName(e.target.value)}
@@ -643,10 +645,10 @@ export function FileExplorerSidebar({
           />
           <div className="flex gap-2">
             <Button type="button" variant="secondary" size="lg" fullWidth onClick={clearSheet}>
-              Cancel
+              {t('explorer.cancel')}
             </Button>
             <Button type="submit" variant="primary" size="lg" fullWidth disabled={!sheetName.trim()}>
-              Rename
+              {t('explorer.rename')}
             </Button>
           </div>
         </form>
@@ -655,7 +657,7 @@ export function FileExplorerSidebar({
       <BottomSheet
         open={isMobile && moveSheet !== null}
         onClose={clearSheet}
-        title={moveSheet?.kind === 'file' ? 'Move file' : 'Move folder'}
+        title={moveSheet?.kind === 'file' ? t('explorer.move_file') : t('explorer.move_folder')}
       >
         <div className="flex flex-col gap-1.5">
           {moveTargetList.map((t) => (
@@ -682,7 +684,7 @@ export function FileExplorerSidebar({
         </div>
         <div className="mt-4 flex gap-2">
           <Button type="button" variant="secondary" size="lg" fullWidth onClick={clearSheet}>
-            Cancel
+            {t('explorer.cancel')}
           </Button>
         </div>
       </BottomSheet>
