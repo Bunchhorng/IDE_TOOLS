@@ -178,16 +178,27 @@ This project owns **etecstudio.online**, so use that path (clean padlock, no
 per-device CA installs — best for students).
 
 **1. Point DNS at the AWS VM.** At your registrar (Namecheap/GoDaddy/etc.) set
-two A records to your **Elastic IP** (this replaces any A records pointing at
-the GCP VM):
+two A records to the instance's **Public IPv4 / Elastic IP** (this replaces any
+A records pointing at the old VM — e.g. `13.210.95.182`).
+
+> **Get the public IP first.** The hostname `ip-172-31-43-168` is the instance's
+> **private** VPC IP (RFC 1918) — it must **never** be used in DNS. From the VM
+> run `curl -4 ifconfig.me` (or read the **Public IPv4 address** in the EC2
+> console; allocate + associate an **Elastic IP** if it has none so the address
+> survives stop/start). Then use *that* value in the A records:
 
 | Host | Type | Value |
 | --- | --- | --- |
-| `@` (etecstudio.online) | A | `172.31.43.168` |
-| `www` | A | `172.31.43.168` |
+| `@` (etecstudio.online) | A | `<Public IP from ifconfig.me>` |
+| `www` | A | `<Public IP from ifconfig.me>` |
 
 Set TTL low (~300s) until the cert is live. Verify with
-`nslookup etecstudio.online`.
+`nslookup etecstudio.online` (must show your public IP, **not** `172.31.43.168`
+and **not** `13.210.95.182`).
+
+> If you flip records, the domain will briefly return **NXDOMAIN** (that's the
+> `curl: Could not resolve host` you may see on the VM) — normal while
+> Namecheap propagates; re-check with `dig +short etecstudio.online @8.8.8.8`.
 
 > Keep the domain at its current registrar. Moving it into **Route 53** costs
 > **$0.50/domain/month** — not needed.
@@ -287,7 +298,7 @@ classroom outgrows it.
 
 <!-- command for remote to ssh -->
 
-ssh -i ~/Downloads/coderunner.pem ubuntu@172.31.43.168
+ssh -i ~/Downloads/coderunner.pem ubuntu@<Public-IP-from-EC2-console>
 
 ls ~/compiler-pwa/deploy/aws/
 
