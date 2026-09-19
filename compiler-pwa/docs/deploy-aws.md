@@ -102,6 +102,9 @@ git clone <your-repo-url> compiler-pwa && cd compiler-pwa
 cp .env.example .env
 ```
 
+
+
+------------------------------------------------------not complete
 Edit `.env`:
 
 ```dotenv
