@@ -98,13 +98,30 @@ Ensure the compose context (the repo) is on the instance:
 
 ```bash
 git clone <your-repo-url> compiler-pwa && cd compiler-pwa
-# ...or: rsync -av ./compiler-pwa/ ubuntu@<ip>:./compiler-pwa/
+# ...or, if you copy from your laptop instead of cloning:
+rsync -av -e "ssh -i ~/Downloads/coderunner.pem" \
+  --exclude '.git' --exclude 'node_modules' --exclude '.env' \
+  ./ ubuntu@<ip>:~/compiler-pwa/
+```
+
+> **SSH key (`.pem`) required.** AWS only accepts your key pair — it rejects
+> password or default public-key auth with `Permission denied (publickey)`.
+> Use the `.pem` you downloaded at EC2 launch with `ssh -i` / `rsync -e "ssh -i"`.
+>
+> Lost your `.pem`? It **cannot be recovered** from AWS. Recover the box via
+> EC2 Instance Connect (if enabled) → stop the instance → detach the root EBS
+> volume → attach it to a temporary instance → add your *new* public key to
+> `/mnt/.../home/ubuntu/.ssh/authorized_keys` → reattach and restart. Simpler:
+> launch a fresh instance with a new key pair while the volume is detached and
+> re-attach that volume. Either way, `chmod 600 <key>.pem` first — SSH rejects
+> world-readable keys.
+
+Then:
+
+```bash
 cp .env.example .env
 ```
 
-
-
-------------------------------------------------------not complete
 Edit `.env`:
 
 ```dotenv
@@ -166,8 +183,8 @@ the GCP VM):
 
 | Host | Type | Value |
 | --- | --- | --- |
-| `@` (etecstudio.online) | A | `<Elastic IP>` |
-| `www` | A | `<Elastic IP>` |
+| `@` (etecstudio.online) | A | `172.31.43.168` |
+| `www` | A | `172.31.43.168` |
 
 Set TTL low (~300s) until the cert is live. Verify with
 `nslookup etecstudio.online`.
@@ -265,3 +282,13 @@ Free-tier ceiling: ~1 burstable vCPU / 1 GB RAM — fine for a classroom (one
 sandbox at a time, plus the app's 5 runs/min per-user rate limit). The same
 compose moves as-is to a bigger instance when the 12-month tier ends or the
 classroom outgrows it.
+
+
+
+<!-- command for remote to ssh -->
+
+ssh -i ~/Downloads/coderunner.pem ubuntu@172.31.43.168
+
+ls ~/compiler-pwa/deploy/aws/
+
+DOMAIN=etecstudio.online ~/compiler-pwa/deploy/aws/deploy.sh
