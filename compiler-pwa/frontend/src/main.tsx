@@ -9,11 +9,13 @@ import { AuthProvider } from './context/AuthContext';
 import { I18nProvider } from './i18n';
 
 // Monaco Editor worker setup for Vite
-import workerEditor from 'monaco-editor/esm/vs/editor/editor.worker?worker';
-import workerJson from 'monaco-editor/esm/vs/language/json/json.worker?worker';
-import workerCss from 'monaco-editor/esm/vs/language/css/css.worker?worker';
-import workerHtml from 'monaco-editor/esm/vs/language/html/html.worker?worker';
-import workerTs from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+// monaco-editor >= 0.56 exports-map: import via the bare "*/..." subpaths,
+// NOT the old "esm/vs/..." paths (they no longer resolve).
+import workerEditor from 'monaco-editor/editor/editor.worker.js?worker';
+import workerJson from 'monaco-editor/language/json/json.worker.js?worker';
+import workerCss from 'monaco-editor/language/css/css.worker.js?worker';
+import workerHtml from 'monaco-editor/language/html/html.worker.js?worker';
+import workerTs from 'monaco-editor/language/typescript/ts.worker.js?worker';
 
 self.MonacoEnvironment = {
   getWorker(_, label) {
