@@ -128,7 +128,7 @@ cat > "${CADDYFILE}" <<EOF
 }
 ${DOMAIN} {
     encode gzip
-    reverse_proxy 127.0.0.1:80
+    reverse_proxy 127.0.0.1:8080
 }
 
 www.${DOMAIN} {

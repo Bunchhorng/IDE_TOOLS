@@ -287,15 +287,47 @@ classroom outgrows it.
 
 <!-- command for remote to ssh -->
 
-ssh -i ~/Downloads/coderunner.pem ubuntu@15.135.252.174
+ssh -i ~/Downloads/coderunner.pem ubuntu@13.210.95.182
 
-ls ~/compiler-pwa/deploy/aws/
+Network layout (this is intentional, keep it):
 
-DOMAIN=etecstudio.online ~/compiler-pwa/deploy/aws/deploy.sh
+- Caddy (host systemd service) owns ports 80/443 and terminates Let's Encrypt TLS.
+- Caddy reverse_proxies to nginx on `127.0.0.1:8080`.
+- nginx (frontend + `/api`) is bound to loopback `127.0.0.1:8080` only (`docker-compose.prod.yml`).
+- Config source of truth: `deploy/aws/deploy.sh` writes the Caddyfile and merges
+  `docker-compose.yml` + `docker-compose.prod.yml` (it passes both `-f` flags).
 
+Redeploy from the VM:
 
------------------------
-cd ~/compiler-pwa
-git fetch origin production
-git checkout -f -B production origin/production
+cd ~/compiler-pwa/compiler-pwa
+git pull origin production
 DOMAIN=etecstudio.online ./deploy/aws/deploy.sh
+
+The app lives in the NESTED `~/compiler-pwa/compiler-pwa` dir (the repo root is
+`~/compiler-pwa`, which contains `AGEND.MD` + the `compiler-pwa/` subdir). Run
+deploy.sh from the nested dir, not the repo root.
+
+Gotchas fixed on 2026-09-20 (do not regress them in the compose/Caddy files):
+
+1. `.env` DB passwords must match the MySQL volume. If the `.env` was regenerated,
+   the DB_USERNAME/DB_PASSWORD/DB_ROOT_PASSWORD drift and every DB request 500s
+   (UI shows "Something went wrong"). Align them with the running container:
+     docker inspect coderunner-mysql --format '{{range .Config.Env}}{{println .}}{{end}}'
+   Also ensure `DB_HOST=mysql` is present (defaults to 127.0.0.1 otherwise).
+2. `docker-compose.yml` must NOT contain any Dockerfile text appended at the end.
+3. nginx must NOT bind host 80/443 — Caddy owns them. Use `127.0.0.1:8080:80`.
+4. Caddyfile must use `reverse_proxy 127.0.0.1:8080`.
+
+Smoke test (expect register → HTTP 201, then HTTPS → 200):
+
+docker compose exec redis redis-cli FLUSHDB
+curl -s -i -X POST http://127.0.0.1:8080/api/auth/register \
+  -H "Content-Type: application/json" -H "Accept: application/json" \
+  -d '{"name":"Test","email":"student-new1@etec.com","password":"secret123","password_confirmation":"secret123"}'
+curl -I https://etecstudio.online
+
+Update workflow (that's all you need):
+
+1. Local: git push origin production
+2. VM: cd ~/compiler-pwa/compiler-pwa && git pull origin production && DOMAIN=etecstudio.online ./deploy/aws/deploy.sh
+3. Browser: hard-refresh / clear service worker.
