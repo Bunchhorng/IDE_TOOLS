@@ -52,6 +52,7 @@ services:
     environment:
       - APP_ENV=${APP_ENV:-local}
       - APP_DEBUG=${APP_DEBUG:-true}
+      - APP_URL=${APP_URL:-http://localhost}
       - APP_KEY=${APP_KEY:-base64:95ObMnk6oNIcFxdv/ft1Nh+zAlhcLu3uX3d3BlGiMvI=}
       - DB_CONNECTION=mysql
       - DB_HOST=mysql
@@ -104,6 +105,7 @@ services:
     working_dir: /var/www/html
     environment:
       - APP_ENV=${APP_ENV:-local}
+      - APP_URL=${APP_URL:-http://localhost}
       - APP_KEY=${APP_KEY:-base64:95ObMnk6oNIcFxdv/ft1Nh+zAlhcLu3uX3d3BlGiMvI=}
       - DB_CONNECTION=mysql
       - DB_HOST=mysql
@@ -138,6 +140,7 @@ services:
       - coderunner-net
 
   frontend:
+    profiles: ["dev"]
     image: node:22-alpine
     container_name: coderunner-frontend
     restart: unless-stopped
@@ -165,13 +168,13 @@ services:
       - "443:443"
     depends_on:
       - backend
-      - frontend
     networks:
       - coderunner-net
 
   # Database admin UI — localhost only. Login with DB_USERNAME/DB_PASSWORD
   # (default compiler/secret) or root/${DB_ROOT_PASSWORD:-rootsecret}.
   phpmyadmin:
+    profiles: ["dev"]
     image: phpmyadmin:latest
     container_name: coderunner-phpmyadmin
     restart: unless-stopped

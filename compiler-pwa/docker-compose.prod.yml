@@ -1,0 +1,16 @@
+# Production overrides — used on the public server only. See docs/deploy-aws.md
+# (AWS free tier) or docs/deploy-free.md (Google Cloud Always Free).
+services:
+  nginx:
+    # Public :80/:443 belong to the host reverse proxy (Caddy) that terminates
+    # TLS. nginx (frontend + /api) stays reachable on loopback only.
+    ports: !override
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:443:443"
+
+  worker:
+    environment:
+      # 1 GB free VM: one sandbox at a time is the safe default. Raise
+      # WORKER_PROCS in .env on a bigger host (this file only guarantees a
+      # floor so the box never OOMs on a default .env).
+      WORKER_PROCS: "1"

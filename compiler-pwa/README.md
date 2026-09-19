@@ -98,6 +98,8 @@ docker compose down -v     # also remove MySQL/Redis volumes (destroys data)
 - [API](docs/api.md)
 - [Security](docs/security.md)
 - [Deployment](docs/deployment.md)
+- [Deploy on AWS Free Tier](docs/deploy-aws.md)
+- [Deploy on Google Cloud Always Free](docs/deploy-free.md)
 - [Frontend](docs/frontend.md)
 
 > **Security first.** All code is treated as malicious and runs only inside a restricted, network-less, resource-limited Docker container. User code is never executed on the host.
