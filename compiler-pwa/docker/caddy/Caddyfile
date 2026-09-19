@@ -2,6 +2,12 @@
 # Install:  sudo cp docker/caddy/Caddyfile /etc/caddy/Caddyfile
 # Pre-req:  DNS A records for etecstudio.online and www.etecstudio.online
 #           must point at the VM's public IP, and ports 80/443 open.
+# Let's Encrypt only — the old ZeroSSL legacy account is rejected (code 2977).
+{
+    admin off
+    email admin@etecstudio.online
+    acme_ca https://acme-v02.api.letsencrypt.org/directory
+}
 etecstudio.online {
     encode gzip
     reverse_proxy 127.0.0.1:80
