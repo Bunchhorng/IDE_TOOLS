@@ -1,7 +1,7 @@
-import Editor from '@monaco-editor/react';
+import Editor, { loader } from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { BeforeMount, OnMount } from '@monaco-editor/react';
-import type { editor } from 'monaco-editor';
 import { useTheme } from '../../context/ThemeContext';
 import { usePreferences } from '../../context/PreferencesContext';
 import { useI18n } from '../../i18n';
@@ -24,6 +24,11 @@ const LANGUAGE_MAP: Record<string, string> = {
   py: 'python',
   python: 'python',
 };
+
+// Bundle Monaco locally instead of fetching it from jsDelivr. School/classroom
+// networks often block the CDN, which left the editor stuck on "Loading…"
+// forever. Workers are already bundled via MonacoEnvironment in main.tsx.
+loader.config({ monaco });
 
 function defineThemes(monaco: Parameters<BeforeMount>[0]) {
   /* Dark palette — cool midnight blues */
@@ -151,7 +156,7 @@ export interface CodeEditorHandle {
 
 const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
   function CodeEditorInner({ value, language, onChange, readOnly = false, autoFocus = false, onCursorChange }, ref) {
-  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const { theme } = useTheme();
   const { prefs } = usePreferences();
   const { t } = useI18n();
