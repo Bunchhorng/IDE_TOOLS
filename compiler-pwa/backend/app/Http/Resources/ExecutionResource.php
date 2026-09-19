@@ -13,6 +13,7 @@ class ExecutionResource extends JsonResource
             'id' => $this->id,
             'user_id' => $this->user_id,
             'project_id' => $this->project_id,
+            'project_slug' => $this->whenLoaded('project', fn () => $this->project?->slug),
             'file_id' => $this->file_id,
             'filename' => $this->whenLoaded('file', fn () => $this->file?->filename),
             'language_id' => $this->language_id,

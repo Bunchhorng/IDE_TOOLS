@@ -270,10 +270,10 @@ export default function History() {
                         </pre>
                       </div>
                     </div>
-                    {e.project_id && (
+                    {e.project_slug && (
                       <div className="mt-3 flex justify-end">
                         <Link
-                          to={`/editor/${e.project_id}`}
+                          to={`/editor/${e.project_slug}`}
                           className="inline-flex items-center gap-1 text-[13px] font-medium text-primary hover:underline"
                         >
                           {t('history.open_editor')}

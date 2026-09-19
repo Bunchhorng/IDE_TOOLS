@@ -108,7 +108,7 @@ class ExecutionController extends Controller
         $perPage = $request->integer('per_page', 20);
 
         $executions = auth()->user()->executions()
-            ->with(['language', 'file:id,id,filename'])
+            ->with(['language', 'file:id,id,filename', 'project:id,slug'])
             ->latest()
             ->paginate($perPage);
 

@@ -100,7 +100,7 @@ export default function AppRouter() {
           }
         />
         <Route
-          path="/editor/:projectId"
+          path="/editor/:projectSlug"
           element={
             <ProtectedRoute>
               <div className="flex h-dvh flex-col">

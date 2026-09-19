@@ -9,6 +9,7 @@ export interface User {
 
 export interface Project {
   id: number;
+  slug: string;
   user_id: number;
   name: string;
   description: string | null;
@@ -65,6 +66,7 @@ export interface Execution {
   id: number;
   user_id: number;
   project_id: number;
+  project_slug?: string | null;
   file_id: number;
   language_id: number;
   status: ExecutionStatus;

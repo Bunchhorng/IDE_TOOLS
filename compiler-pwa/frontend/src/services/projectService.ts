@@ -12,8 +12,8 @@ export const projectService = {
     return response.data;
   },
 
-  async getById(id: number): Promise<ApiResponse<Project>> {
-    const response = await api.get(`/projects/${id}`);
+  async getBySlug(slug: string): Promise<ApiResponse<Project>> {
+    const response = await api.get(`/projects/${slug}`);
     return response.data;
   },
 
@@ -22,13 +22,13 @@ export const projectService = {
     return response.data;
   },
 
-  async update(id: number, data: Partial<CreateProjectData>): Promise<ApiResponse<Project>> {
-    const response = await api.put(`/projects/${id}`, data);
+  async update(slug: string, data: Partial<CreateProjectData>): Promise<ApiResponse<Project>> {
+    const response = await api.put(`/projects/${slug}`, data);
     return response.data;
   },
 
-  async delete(id: number): Promise<ApiResponse<null>> {
-    const response = await api.delete(`/projects/${id}`);
+  async delete(slug: string): Promise<ApiResponse<null>> {
+    const response = await api.delete(`/projects/${slug}`);
     return response.data;
   },
 };

@@ -107,7 +107,7 @@ export default function Dashboard() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await projectService.delete(deleteTarget.id);
+      await projectService.delete(deleteTarget.slug);
       setProjects((ps) => ps.filter((p) => p.id !== deleteTarget.id));
       setTotal((t) => Math.max(0, t - 1));
       toast.success(t('toast.project_deleted'), deleteTarget.name);
@@ -129,7 +129,7 @@ export default function Dashboard() {
     if (!renameTarget || !renameValue.trim()) return;
     setRenaming(true);
     try {
-      const response = await projectService.update(renameTarget.id, { name: renameValue.trim() });
+      const response = await projectService.update(renameTarget.slug, { name: renameValue.trim() });
       const patch = response.data;
       setProjects((ps) => ps.map((p) => (p.id === patch.id ? { ...p, ...patch } : p)));
       toast.success(t('toast.project_renamed'), patch.name);
@@ -248,7 +248,7 @@ export default function Dashboard() {
               return (
                 <Card key={project.id} className="group">
                   <button
-                    onClick={() => navigate(`/editor/${project.id}`)}
+                    onClick={() => navigate(`/editor/${project.slug}`)}
                     className="block w-full p-4 text-left"
                   >
                     <div className="mb-3 flex items-start justify-between gap-2">
@@ -282,7 +282,7 @@ export default function Dashboard() {
                               key: 'open',
                               label: t('dashboard.open'),
                               icon: 'external',
-                              onSelect: () => navigate(`/editor/${project.id}`),
+                              onSelect: () => navigate(`/editor/${project.slug}`),
                             },
                             {
                               key: 'home',
@@ -326,7 +326,7 @@ export default function Dashboard() {
                       ))}
                       <span className="ml-auto">
                         <Link
-                          to={`/editor/${project.id}`}
+                          to={`/editor/${project.slug}`}
                           className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
                         >
                           {t('dashboard.open_editor')}

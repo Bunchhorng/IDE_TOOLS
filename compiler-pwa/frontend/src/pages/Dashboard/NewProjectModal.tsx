@@ -57,13 +57,13 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
       const project = projectResponse.data;
       const content = getTemplateContent(language, template);
       try {
-        await fileService.create(project.id, { filename, language, content });
+        await fileService.create(project.slug, { filename, language, content });
       } catch {
         /* file creation is optional; keep project only */
       }
       toast.success(t('toast.project_created'), `${project.name}`);
       onClose();
-      navigate(`/editor/${project.id}`);
+      navigate(`/editor/${projectResponse.data.slug}`);
     } catch (err: unknown) {
       setError(
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??

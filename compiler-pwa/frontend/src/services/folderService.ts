@@ -12,13 +12,13 @@ interface UpdateFolderData {
 }
 
 export const folderService = {
-  async getByProject(projectId: number): Promise<ApiResponse<Folder[]>> {
-    const response = await api.get(`/projects/${projectId}/folders`);
+  async getByProject(projectSlug: string): Promise<ApiResponse<Folder[]>> {
+    const response = await api.get(`/projects/${projectSlug}/folders`);
     return response.data;
   },
 
-  async create(projectId: number, data: CreateFolderData): Promise<ApiResponse<Folder>> {
-    const response = await api.post(`/projects/${projectId}/folders`, data);
+  async create(projectSlug: string, data: CreateFolderData): Promise<ApiResponse<Folder>> {
+    const response = await api.post(`/projects/${projectSlug}/folders`, data);
     return response.data;
   },
 

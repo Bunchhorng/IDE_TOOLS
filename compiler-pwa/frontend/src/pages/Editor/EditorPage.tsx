@@ -38,7 +38,7 @@ import type { Project, File, Folder, Language, Execution } from '../../types';
 type MobileTab = 'code' | 'files' | 'output' | 'more';
 
 export default function EditorPage() {
-  const { projectId } = useParams<{ projectId: string }>();
+  const { projectSlug } = useParams<{ projectSlug: string }>();
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
   const toast = useToast();
@@ -106,7 +106,6 @@ export default function EditorPage() {
   });
   const sidebar = useResizableX({ initial: 240, min: 140 });
 
-  const pId = Number(projectId);
   const dirty =
     !!activeFile &&
     (activeFile.content !== savedContent || activeFile.language !== savedLanguage);
@@ -145,20 +144,20 @@ export default function EditorPage() {
   }, [files, openFileIds]);
 
   const loadProject = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectSlug) return;
     try {
-      const response = await projectService.getById(Number(projectId));
+      const response = await projectService.getBySlug(projectSlug);
       setProject(response.data);
     } catch {
       toast.error(t('toast.project_not_found'));
       navigate('/dashboard');
     }
-  }, [projectId, navigate, toast, t]);
+  }, [projectSlug, navigate, toast, t]);
 
   const loadFiles = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectSlug) return;
     try {
-      const response = await fileService.getByProject(Number(projectId));
+      const response = await fileService.getByProject(projectSlug);
       setFiles(response.data);
       if (response.data.length > 0) {
         const first = response.data[0];
@@ -172,17 +171,17 @@ export default function EditorPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, toast, t]);
+  }, [projectSlug, toast, t]);
 
   const loadFolders = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectSlug) return;
     try {
-      const response = await folderService.getByProject(Number(projectId));
+      const response = await folderService.getByProject(projectSlug);
       setFolders(response.data);
     } catch {
       /* folders are optional */
     }
-  }, [projectId]);
+  }, [projectSlug]);
 
   const loadLanguages = useCallback(async () => {
     try {
@@ -766,11 +765,12 @@ export default function EditorPage() {
   const handleCreateFile = (filename: string, language: string, folderId: number | null = null, content?: string) => {
     void (async () => {
       try {
+        if (!projectSlug) return;
         if (activeFile && dirty) {
           const saved = await handleSave();
           if (!saved) return;
         }
-        const response = await fileService.create(pId, {
+        const response = await fileService.create(projectSlug, {
           folder_id: folderId,
           filename,
           language,
@@ -791,7 +791,8 @@ export default function EditorPage() {
   const handleCreateFolder = (name: string, parentId: number | null = null) => {
     void (async () => {
       try {
-        const response = await folderService.create(pId, { name, parent_id: parentId });
+        if (!projectSlug) return;
+        const response = await folderService.create(projectSlug, { name, parent_id: parentId });
         setFolders((fs) => [...fs, response.data]);
         toast.success(t('toast.folder_created'), name);
       } catch {

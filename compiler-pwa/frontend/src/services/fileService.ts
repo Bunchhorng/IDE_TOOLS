@@ -16,8 +16,8 @@ interface UpdateFileData {
 }
 
 export const fileService = {
-  async getByProject(projectId: number): Promise<ApiResponse<File[]>> {
-    const response = await api.get(`/projects/${projectId}/files`);
+  async getByProject(projectSlug: string): Promise<ApiResponse<File[]>> {
+    const response = await api.get(`/projects/${projectSlug}/files`);
     return response.data;
   },
 
@@ -26,8 +26,8 @@ export const fileService = {
     return response.data;
   },
 
-  async create(projectId: number, data: CreateFileData): Promise<ApiResponse<File>> {
-    const response = await api.post(`/projects/${projectId}/files`, data);
+  async create(projectSlug: string, data: CreateFileData): Promise<ApiResponse<File>> {
+    const response = await api.post(`/projects/${projectSlug}/files`, data);
     return response.data;
   },
 
