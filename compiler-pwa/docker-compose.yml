@@ -72,6 +72,10 @@ services:
       - EXECUTION_RATE_PER_MINUTE=${EXECUTION_RATE_PER_MINUTE:-5}
       - EXECUTION_RATE_PER_HOUR=${EXECUTION_RATE_PER_HOUR:-50}
       - EXECUTION_HOST_BASE=${EXECUTION_HOST_BASE}
+      # entrypoint.sh adds www-data to this group, so php-fpm can reach the
+      # docker socket. Must be a container env var, not just group_add:
+      # php-fpm resets supplementary groups to www-data's initgroups on setuid.
+      - DOCKER_GROUP_ID=${DOCKER_GROUP_ID:-984}
     volumes:
       - ./backend:/var/www/html
       - ./docker/backend/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro
@@ -122,6 +126,7 @@ services:
       - EXECUTION_MEMORY_LIMIT=${EXECUTION_MEMORY_LIMIT:-134217728}
       - EXECUTION_OUTPUT_LIMIT=${EXECUTION_OUTPUT_LIMIT:-1000000}
       - EXECUTION_HOST_BASE=${EXECUTION_HOST_BASE}
+      - DOCKER_GROUP_ID=${DOCKER_GROUP_ID:-984}
       # How many parallel queue workers (=> parallel sandbox containers).
       # Size as: CPU cores x 0.75 for compile-heavy classrooms.
       - WORKER_PROCS=${WORKER_PROCS:-4}
