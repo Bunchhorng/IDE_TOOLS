@@ -6,6 +6,7 @@ import type { TerminalPanelHandle } from '../../components/Terminal/TerminalPane
 import { EditorTabs } from '../../components/Editor/EditorTabs';
 import { EditorTopBar } from '../../components/Editor/EditorTopBar';
 import { StatusBar } from '../../components/Editor/StatusBar';
+import { ZoomControl } from '../../components/Editor/ZoomControl';
 import { FileExplorerSidebar } from '../../components/FileExplorer/FileExplorerSidebar';
 import { TerminalPanel } from '../../components/Terminal/TerminalPanel';
 import type { PanelTab } from '../../components/Terminal/TerminalPanel';
@@ -18,6 +19,7 @@ import { Icon } from '../../components/ui/Icon';
 import { Spinner } from '../../components/ui/Button';
 import { useResizable } from '../../hooks/useResizable';
 import { useResizableX } from '../../hooks/useResizableX';
+import { usePinchZoom } from '../../hooks/usePinchZoom';
 import { cn } from '../../lib/cn';
 import { getTemplateContent } from '../../lib/templates';
 import { detectLanguage } from '../../lib/languages';
@@ -42,8 +44,13 @@ export default function EditorPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
   const toast = useToast();
-  const { prefs } = usePreferences();
+  const { prefs, updatePrefs } = usePreferences();
   const { t } = useI18n();
+
+  const editorContainerRef = usePinchZoom<HTMLDivElement>(
+    () => prefs.fontSize,
+    (fontSize) => updatePrefs({ fontSize }),
+  );
 
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -1064,7 +1071,7 @@ export default function EditorPage() {
               onCloseTab={handleCloseTab}
             />
 
-            <div className="flex min-h-0 flex-1 overflow-hidden">
+            <div ref={editorContainerRef} className="flex min-h-0 flex-1 overflow-hidden">
               {activeFile ? (
                 <CodeEditor
                   ref={editorRef}
@@ -1210,6 +1217,15 @@ export default function EditorPage() {
         </button>
       )}
 
+      {/* Mobile floating zoom pill */}
+      {mobileTab === 'code' && activeFile && (
+        <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-4 z-40 lg:hidden">
+          <div className="rounded-lg border border-edge bg-page/95 px-1.5 py-1 shadow-lg backdrop-blur">
+            <ZoomControl />
+          </div>
+        </div>
+      )}
+
       {/* Mobile bottom nav */}
       <nav
         className="fixed inset-x-0 bottom-0 z-40 flex min-h-16 items-stretch border-t border-edge bg-page/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
@@ -1286,6 +1302,10 @@ export default function EditorPage() {
               <Icon name="share" size={15} />
               {t('editor.share_file')}
             </Button>
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-edge bg-raised/50 px-3 py-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">{t('editor.zoom')}</span>
+            <ZoomControl />
           </div>
         </div>
       </BottomSheet>

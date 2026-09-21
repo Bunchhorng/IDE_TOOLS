@@ -2,6 +2,7 @@ import { useOnline } from '../../hooks/useOnline';
 import { useTheme } from '../../context/ThemeContext';
 import { usePreferences } from '../../context/PreferencesContext';
 import { Icon } from '../ui/Icon';
+import { ZoomControl } from './ZoomControl';
 import { LanguageIcon, type LangGlyph } from '../LanguageIcon';
 import LanguageSelector from '../LanguageSelector/LanguageSelector';
 import { cn } from '../../lib/cn';
@@ -117,6 +118,8 @@ export function StatusBar({
           </span>
           {online ? t('general.online') : t('general.offline')}
         </span>
+        <span className="h-3 w-px shrink-0 bg-edge" />
+        <ZoomControl />
         <button
           onClick={toggle}
           className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 transition-colors hover:bg-raised hover:text-ink"

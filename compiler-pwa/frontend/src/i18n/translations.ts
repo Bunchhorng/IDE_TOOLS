@@ -458,6 +458,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.save_shortcut': 'Save (Ctrl+S)',
     'editor.run_shortcut': 'Run (Ctrl+Enter)',
     'editor.share': 'Share',
+    'editor.zoom_in': 'Zoom in',
+    'editor.zoom_out': 'Zoom out',
+    'editor.zoom_reset': 'Reset zoom',
+    'editor.zoom': 'Zoom',
 
     // Status bar additions
     'statusbar.files': '{n} files',
@@ -999,6 +1003,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'settings.no_email_plain': 'គ្មានអ៊ីមែល',
     'settings.language': 'ភាសា',
     'settings.language_desc': 'ជ្រើសរើសភាសាសម្រាប់ចំណុចប្រទាក់។',
+    'editor.zoom_in': 'ពង្រីក',
+    'editor.zoom_out': 'បង្រួម',
+    'editor.zoom_reset': 'កំណត់កម្រិតពង្រីកឡើងវិញ',
+    'editor.zoom': 'កម្រិតពង្រីក',
   },
 };
 
