@@ -287,11 +287,41 @@ class DockerExecutionService
 
             $this->forceCleanup($execution->id); // drop any orphan with the same name
 
+            // `docker run -d` only needs the daemon to ACCEPT the container.
+            // Under load (image warm-up, many concurrent runs) that handshake
+            // can outlast a web request, so never let a slow daemon masquerade
+            // as "Failed to start interactive session": run() gets a generous
+            // window, and liveness is verified by the ready/rc wait below.
+            $name = 'coderunner-'.$execution->id;
             $process = new Process($command);
-            $process->setTimeout(15);
-            $process->run();
-            if (! $process->isSuccessful()) {
-                throw new \RuntimeException('Failed to start container: '.$process->getErrorOutput());
+            $process->setTimeout(60);
+            try {
+                $process->run();
+            } catch (ProcessTimedOutException) {
+                // The daemon may still accept the container after run() gives
+                // up — isContainerRunning() decides, not this catch.
+            }
+
+            if (! $process->isSuccessful()
+                && ! $this->isContainerRunning($name)
+                && ! is_file($workDir.'/ready.txt')
+                && ! is_file($workDir.'/rc.txt')
+            ) {
+                $dockerError = trim($process->getErrorOutput());
+                $this->forceCleanup($execution->id);
+                $this->cleanup($workDir);
+                Log::error('Interactive docker run failed', [
+                    'execution_id' => $execution->id,
+                    'error' => $dockerError,
+                ]);
+                return $this->result(
+                    'system_error',
+                    '',
+                    $this->startupErrorMessage('Failed to start the sandbox container.', $dockerError),
+                    null,
+                    null,
+                    true,
+                );
             }
 
             // Wait until the relay has opened the control fifo (ready marker),
@@ -299,11 +329,31 @@ class DockerExecutionService
             // A compile/syntax error writes rc.txt and exits WITHOUT ever
             // writing ready.txt — break early so the real error is surfaced
             // (via readSessionState) instead of a 20s stall -> system_error.
+            // If the container dies before ready/rc (docker CLI missing on the
+            // target UID, image not built, daemon failure), report the daemon
+            // logs so the cause is visible instead of a generic error.
             $start = microtime(true);
+            $goneConsecutive = 0;
             while (! is_file($workDir.'/ready.txt') && (microtime(true) - $start) < 20) {
                 $rcProbe = trim((string) $this->readCappedFile($workDir.'/rc.txt'));
                 if ($rcProbe !== '' && is_numeric($rcProbe)) {
                     break;
+                }
+                if (! $this->isContainerRunning($name)) {
+                    // A freshly created container can take a beat to flip to
+                    // "running" — only declare death after it stays gone for
+                    // several consecutive probes (~500ms).
+                    if (++$goneConsecutive >= 5) {
+                        $logs = $this->containerLogs($name);
+                        $detail = $logs !== ''
+                            ? $logs
+                            : 'The sandbox container exited before the session was ready. Make sure the Docker daemon is reachable and the executor images are built (./executor/build.sh).';
+                        $this->forceCleanup($execution->id);
+                        $this->cleanup($workDir);
+                        return $this->result('system_error', '', $detail, null, null, true);
+                    }
+                } else {
+                    $goneConsecutive = 0;
                 }
                 usleep(100000);
             }
@@ -623,7 +673,7 @@ class DockerExecutionService
         // ready.txt is only a "container is booting the session" marker now —
         // pbridge opens the fifo O_RDWR so input writers never block.
         $script .= "printf ready > /app/ready.txt\n";
-        $script .= "timeout -s KILL {$timeout}s python3 -u /app/pbridge.py --cmd '{$runCmd}' --in /app/control.fifo --out /app/stdout.txt --pid /app/pid.txt --rows 24 --cols 80 --max {$outputLimit}\n";
+        $script .= "timeout -s KILL {$timeout}s python3 -u /app/pbridge.py --cmd '{$runCmd}' --in /app/control.fifo --out /app/stdout.txt --err /app/stderr.txt --pid /app/pid.txt --rows 24 --cols 80 --max {$outputLimit}\n";
         $script .= "run_rc=\$?\n";
         $script .= "if [ \$run_rc -eq 137 ]; then echo 1 > /app/timedout.txt; fi\n";
         $script .= "echo \$run_rc > /app/rc.txt\n";
@@ -638,9 +688,11 @@ class DockerExecutionService
     /**
      *  The PTY relay script embedded next to run.sh. Runs a command attached
      *  to a pseudo-terminal, relays raw bytes from the control fifo into the
-     *  PTY master, and streams the master output to /app/stdout.txt.
-     *  A 9-byte control packet starting with 0x1c (rows + cols, LE32 each)
-     *  resizes the PTY; everything else is forwarded verbatim as keystrokes.
+     *  PTY master, and streams the master output to /app/stdout.txt. Program
+     *  stderr is pulled through a separate pipe into /app/stderr.txt (and
+     *  mirrored into the terminal stream so it still shows live). A 9-byte
+     *  control packet starting with 0x1c (rows + cols, LE32 each) resizes
+     *  the PTY; everything else is forwarded verbatim as keystrokes.
      */
     protected function ptyBridgeSource(): string
     {
@@ -671,6 +723,7 @@ def arg(name, default=None):
 cmd = arg('--cmd', '')
 inpipe = arg('--in', '/app/control.fifo')
 outfile = arg('--out', '/app/stdout.txt')
+errfile = arg('--err', '/app/stderr.txt')
 pidfile = arg('--pid', '/app/pid.txt')
 rows = int(arg('--rows', '0') or 0)
 cols = int(arg('--cols', '0') or 0)
@@ -703,15 +756,23 @@ os.set_blocking(master, False)
 if 0 < rows <= 1000 and 0 < cols <= 5000 and (rows or cols):
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', rows, cols, 0, 0))
 
+# Real stderr goes to a pipe (not the pty) so the bridge can persist a
+# separate stderr.txt for the Errors pane, while still mirroring it into
+# the terminal stream below so it appears live like a real shell.
+err_r, err_w = os.pipe()
+
 child = os.fork()
 if child == 0:
     os.setsid()
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
     os.dup2(slave, 0)
     os.dup2(slave, 1)
-    os.dup2(slave, 2)
+    os.dup2(err_w, 2)
     if slave > 2:
         os.close(slave)
+    if err_w > 2:
+        os.close(err_w)
+    os.close(err_r)
     os.close(master)
     # `exec` makes the program itself the session/process-group leader, so a
     # SIGINT raised by Ctrl+C hits exactly the program (and its children) —
@@ -720,6 +781,8 @@ if child == 0:
     os._exit(127)
 
 os.close(slave)
+os.close(err_w)
+os.set_blocking(err_r, False)
 try:
     open(pidfile, 'w').write(str(child))
 except OSError:
@@ -733,6 +796,7 @@ except OSError:
     infd = -1
 
 out = os.fdopen(os.open(outfile, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644), 'wb', buffering=0)
+err = os.fdopen(os.open(errfile, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644), 'wb', buffering=0)
 
 
 def kill_child(_signum=None, _frame=None):
@@ -791,14 +855,53 @@ def drain_master():
     return True
 
 
+def drain_pipe():
+    global written, written_err, err_closed
+    if err_closed:
+        return False
+    try:
+        data = os.read(err_r, 65536)
+    except BlockingIOError:
+        return False
+    except OSError:
+        err_closed = True
+        return False
+    if not data:
+        err_closed = True
+        return False
+    if max_bytes:
+        # Persist the real stderr into its own capped file (Errors pane)...
+        if written_err < max_bytes:
+            room = max_bytes - written_err
+            err.write(data[:room])
+            written_err += len(data[:room])
+            if len(data) > room:
+                mark_truncated()
+        # ...and mirror it into the terminal stream so stderr still shows
+        # live inline with stdout, exactly like a real terminal.
+        if written >= max_bytes:
+            mark_truncated()
+        else:
+            room = max_bytes - written
+            out.write(data[:room])
+            written += len(data[:room])
+            if len(data) > room:
+                mark_truncated()
+    return True
+
+
 buf = b''
 written = 0
+written_err = 0
+err_closed = False
 truncated_flag = False
 status = None
 while status is None:
     fds = [master]
     if infd >= 0:
         fds.append(infd)
+    if not err_closed:
+        fds.append(err_r)
     ready, _, _ = select.select(fds, [], [])
     if infd >= 0 and infd in ready:
         try:
@@ -826,6 +929,8 @@ while status is None:
             buf = b''
     if master in ready:
         drain_master()
+    if not err_closed and err_r in ready:
+        drain_pipe()
     try:
         waited, st = os.waitpid(child, os.WNOHANG)
     except OSError:
@@ -834,14 +939,24 @@ while status is None:
         status = st
 
 # The child may have a few buffered bytes still in the pty after it exits —
-# keep draining (bounded) so the very last output is not lost.
+# keep draining (bounded) so the very last output is not lost. Drain the
+# stderr pipe alongside it for the same reason.
 while True:
-    ready, _, _ = select.select([master], [], [], 0.15)
+    fds = [master]
+    if not err_closed:
+        fds.append(err_r)
+    ready, _, _ = select.select(fds, [], [], 0.15)
     if not ready:
         break
-    if not drain_master():
+    drained = False
+    if master in ready and drain_master():
+        drained = True
+    if not err_closed and err_r in ready and drain_pipe():
+        drained = True
+    if not drained:
         break
 out.close()
+err.close()
 
 if status is None:
     code = 137
@@ -864,6 +979,38 @@ PY;
             return $process->isSuccessful() && trim($process->getOutput()) === 'true';
         } catch (\Throwable) {
             return false;
+        }
+    }
+
+    /** Surface the real docker/cli failure with a bounded, operator-actionable message. */
+    protected function startupErrorMessage(string $summary, string $detail): string
+    {
+        $detail = trim(mb_substr($detail, 0, 2000));
+        if ($detail === '') {
+            return $summary;
+        }
+        $hint = str_contains($detail, 'permission denied')
+            || str_contains($detail, 'dial unix /var/run/docker.sock')
+            ? ' The docker socket is not accessible by the process serving this request.'
+            : (str_contains($detail, 'No such image') ? ' The executor image is not built (./executor/build.sh).' : '');
+
+        return $summary.$hint.' Docker: '.$detail;
+    }
+
+    /** Tail a container's logs for startup diagnostics (best-effort). */
+    protected function containerLogs(string $name): string
+    {
+        try {
+            $process = new Process(['docker', 'logs', '--tail', '100', $name]);
+            $process->setTimeout(10);
+            $process->run();
+            if (! $process->isSuccessful()) {
+                return '';
+            }
+            $logs = trim($process->getOutput()."\n".$process->getErrorOutput());
+            return mb_substr($logs, 0, 2000);
+        } catch (\Throwable) {
+            return '';
         }
     }
 
@@ -906,14 +1053,23 @@ PY;
 
     protected function cleanup(string $workDir): void
     {
-        if (is_dir($workDir)) {
+        if (! is_dir($workDir)) {
+            return;
+        }
+        // The finished sandbox container can still hold its /app bind mount for
+        // a beat after exit (--rm teardown); rmdir then fails with EBUSY. Retry
+        // briefly instead of leaking the workdir on every finalize.
+        for ($i = 0; $i < 10; $i++) {
             $files = glob($workDir.'/*') ?: [];
             foreach ($files as $file) {
                 // Regular files, symlinks AND fifos all support unlink().
                 @chmod($file, 0600);
                 @unlink($file);
             }
-            @rmdir($workDir);
+            if (@rmdir($workDir)) {
+                return;
+            }
+            usleep(100000);
         }
     }
 

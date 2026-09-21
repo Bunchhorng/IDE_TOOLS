@@ -512,61 +512,8 @@ export default function EditorPage() {
     }, 0);
   }, []);
 
-  const handleRun = async (continueSession = false) => {
+  const runBatch = async (continueSession = false) => {
     if (!activeFile || !project) return;
-    // Synchronous guard: Enter/Run can fire again while await handleSave()
-    // yields, so the isRunningRef check alone is not enough.
-    if (isRunningRef.current) return;
-    isRunningRef.current = true;
-    // Any run invalidates in-flight live-session finalizers (e.g. a Stop
-    // confirmation arriving after the user already reran or switched file).
-    sessionTokenRef.current += 1;
-    if (
-      window.matchMedia('(max-width: 1023px)').matches &&
-      (mobileTab === 'files' || mobileTab === 'more')
-    ) {
-      setMobileTab('code');
-    }
-
-    // Interactive C/C++/Python with input reads: keep the sandbox running and
-    // send answers one line at a time, so menu loops and multi-step prompts work.
-    if (interactiveEligible && !continueSession) {
-      try {
-        if (dirty) await handleSave();
-        setIsRunning(true);
-        setExecution(null);
-        setLiveOutputB64('');
-        const created = await executionService.execute({
-          language: selectedLanguage,
-          project_id: project.id,
-          file_id: activeFile.id,
-          code: activeFile.content,
-          stdin: '',
-          interactive: true,
-        });
-        const started = await executionService.startInteractive(created.data.id);
-        const exec = started.data;
-        if (!exec) throw new Error('Missing execution data');
-        if (exec.interactive_finished) {
-          // Finished instantly (e.g. a compile/syntax error) — surface the
-          // result and release the running guard (we never entered a session).
-          isRunningRef.current = false;
-          setIsRunning(false);
-          setSuppress401Reload(false);
-          setExecution(exec);
-          return;
-        }
-        beginLive(exec);
-      } catch (err) {
-        console.error('Interactive run failed, falling back to batch', err);
-        // Release the guard, then degrade to the normal batch path.
-        isRunningRef.current = false;
-        setIsRunning(false);
-        await handleRunRef.current(false);
-      }
-      return;
-    }
-
     // Flush any uncommitted console input so the last typed line is included.
     const finalStdin = consoleRef.current?.flushPending() ?? stdin;
     if (finalStdin !== stdin) setStdin(finalStdin);
@@ -658,6 +605,78 @@ export default function EditorPage() {
       setIsRunning(false);
       setSuppress401Reload(false);
     }
+  };
+
+  const handleRun = async (continueSession = false) => {
+    if (!activeFile || !project) return;
+    // Synchronous guard: Enter/Run can fire again while await handleSave()
+    // yields, so the isRunningRef check alone is not enough.
+    if (isRunningRef.current) return;
+    isRunningRef.current = true;
+    // Any run invalidates in-flight live-session finalizers (e.g. a Stop
+    // confirmation arriving after the user already reran or switched file).
+    sessionTokenRef.current += 1;
+    if (
+      window.matchMedia('(max-width: 1023px)').matches &&
+      (mobileTab === 'files' || mobileTab === 'more')
+    ) {
+      setMobileTab('code');
+    }
+
+    // Interactive C/C++/Python with input reads: keep the sandbox running and
+    // send answers one line at a time, so menu loops and multi-step prompts work.
+    if (interactiveEligible && !continueSession) {
+      try {
+        if (dirty) await handleSave();
+        setIsRunning(true);
+        setExecution(null);
+        setLiveOutputB64('');
+        const created = await executionService.execute({
+          language: selectedLanguage,
+          project_id: project.id,
+          file_id: activeFile.id,
+          code: activeFile.content,
+          stdin: '',
+          interactive: true,
+        });
+        const started = await executionService.startInteractive(created.data.id);
+        const exec = started.data;
+        if (!exec) throw new Error('Missing execution data');
+        if (exec.interactive_finished) {
+          // Finished instantly: a compile/syntax error surfaces directly. An
+          // interactive-system failure (status below) is NOT the program's
+          // fault — degrade to a single batch run so the user still gets
+          // output (any typed console input becomes pre-supplied stdin).
+          if (exec.status === 'system_error' || exec.status === 'failed') {
+            isRunningRef.current = false;
+            setIsRunning(false);
+            setSuppress401Reload(false);
+            await runBatch(true);
+            return;
+          }
+          // Release the running guard (we never entered a session).
+          isRunningRef.current = false;
+          setIsRunning(false);
+          setSuppress401Reload(false);
+          setExecution(exec);
+          return;
+        }
+        beginLive(exec);
+      } catch (err) {
+        console.error('Interactive run failed, falling back to batch', err);
+        // The interactive sandbox did not start (e.g. docker socket or daemon
+        // issue). Release the guard and degrade to a single batch run. Never
+        // re-run handleRun here — interactiveEligible is still true, so that
+        // would loop the failing interactive path forever.
+        isRunningRef.current = false;
+        setIsRunning(false);
+        setSuppress401Reload(false);
+        await runBatch(true);
+      }
+      return;
+    }
+
+    await runBatch(continueSession);
   };
   handleRunRef.current = handleRun;
 
