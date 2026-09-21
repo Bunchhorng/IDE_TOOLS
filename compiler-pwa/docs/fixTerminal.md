@@ -1173,41 +1173,106 @@ Test:
 FINAL REPORT
 ============
 
-After implementation, report:
-
 ### Current Architecture
 
-Explain:
+```
+Student (React PWA / Monaco / xterm)
+   │  Bearer token, HTTPS (nginx)
+   ▼
+Laravel API ── docker.sock ──► docker run -d (startInteractive, `docker run` hard-timeout 60 s)
+   │
+   │  PTY bridge (pbridge.py)  → real stdin/stdout/stderr of the running C/C++/Python process
+   │                              stdout → streamed back; stderr → piped, also persisted to
+   │                              /app/stderr.txt inside the sandbox and mirrored into the stream
+   ▼
+Frontend polls GET /api/executions/{id}/interactive every ~500 ms
+   │  output_b64 (base64 terminal bytes) → xterm.write()
+   ▼
+xterm.onData / Enter → POST /api/executions/{id}/interactive/input → fifo → PTY → process stdin
+Stop/graphical → POST /api/executions/{id}/interactive/signal (SIGINT/SIGTERM/SIGKILL) → docker rm -f
+```
 
-Frontend
-→ Terminal
-→ API
-→ Backend
-→ Process
+Interactive sessions are **not** queued: `POST /api/execute` with `interactive: true` returns an
+execution that is then started on demand via `/interactive/start`. Batch runs remain queued. All
+interactive endpoints authorize ownership (`view`), so a session is always user-scoped.
 
 ### Root Cause
 
-Explain why the previous terminal input behavior was not truly interactive.
+The previous "terminal" was an output display plus a separate console-input box: the frontend merged
+output text with typed input client-side, and the backend wasn't a real PTY session, so there was no
+actual live stdin/stdout/stderr to the running process. Related failure modes found while tracing:
+
+- `docker run -d` inside the Symfony `Process` had a 15 s timeout — under slow cold-starts the
+  `ProcessTimedOutException` became a generic `system_error` even though the container would have
+  booted fine moments later.
+- In production php-fpm ran as `www-data` without access to `/var/run/docker.sock`, so every start
+  failed with a permission error and no diagnostic pointed at the reason.
+- stderr was merged into the PTY with no separate channel, so there was no way to distinguish program
+  stderr from stdout.
+- The frontend `handleRun` catch path re-entered the interactive branch, so a failed/slow start could
+  loop retrying instead of falling back gracefully, and typed input was lost on error.
 
 ### Files Changed
 
-List every modified file.
+- `backend/app/Services/DockerExecutionService.php` — interactive runner hardening (see Changes).
+- `docker-compose.yml` — `EXECUTION_INTERACTIVE_TIMEOUT` env passed to backend + worker.
+- `.env.example` — `EXECUTION_INTERACTIVE_TIMEOUT=120`.
+- `docker/backend/www.conf` — `request_terminate_timeout` 65 s → 90 s (covers 60 s docker window + 20 s ready/rc handshake; prod-specific).
+- `frontend/src/pages/Editor/EditorPage.tsx` — `runBatch(continueSession)` extraction + one-shot batch fallback.
 
 ### Changes
 
-Explain each important change.
+- `startInteractive`: `docker run -d` timeout 15 s → 60 s; `ProcessTimedOutException` is swallowed and
+  liveness decided by `isContainerRunning`; failure is only reported when nothing actually started;
+  diagnostic sources: `containerLogs()` (`docker logs --tail 100`) and `startupErrorMessage()`
+  (permission-denied / socket-unreachable / missing-image hints) so prod socket-permission failures
+  are self-explanatory.
+- Ready-wait is 20 s bounded; if the container dies before it is ready, real leader logs are returned
+  instead of "Process terminated unexpectedly".
+- PTY bridge now pipes **fd 2 to a second channel** `--err /app/stderr.txt`: real stderr bytes are
+  persisted (capped) inside the sandbox and mirrored into the terminal stream, so runtime errors and
+  prompts are visible live and retained in the final `stderr` field.
+- `cleanup()` bounded retry (10 attempts × 100 ms) — previously `finalize()`'s `rmdir` could hit
+  `EBUSY` while the `--rm` sandbox still mounted `/app`, leaking workdirs.
+- Frontend: interactive catch degrades to a single `runBatch(true)` and never re-enters the
+  interactive branch; `interactive_finished` at `system_error`/`failed` also degrades to one batch
+  run, preserving the student's typed input as pre-supplied stdin.
 
 ### Terminal Tests
 
-Show actual tests and results.
+Live end-to-end against the stack (auth → project/file → execute → interactive loop):
+
+| # | Scenario | Result |
+|---|----------|--------|
+| T1 | Python print-only interactive | PASS |
+| T2 | Python one `input()` — stdout `Enter name: Bunchhorng` + `Hello Bunchhorng`, stderr `Enter name: ` | PASS |
+| T3 | Python multiple `input()` | PASS |
+| T4 | Python syntax error → `compile_error` | PASS |
+| T5 | Python runtime error → `runtime_error` with real stderr traceback (stdout carries mirrors) | PASS |
+| T6 | C two `scanf` | PASS |
+| T7 | C++ `cin` | PASS |
+| T8 | Batch Python stdin regression (queued path unchanged) | PASS |
+| T9 | Two concurrent sessions — output fully isolated, no cross-talk | PASS |
+| T10 | Stop (`close:true` → then signal) → `stopped` | PASS |
+| Timeout | `EXECUTION_INTERACTIVE_TIMEOUT=20` override → infinite loop → `timeout`, exit 137 | PASS |
+
+- After the full suite: **0 leftover workdirs**, **0 leftover `coderunner-*` containers**.
+- `php -l` clean, `tsc -b` clean, `oxlint` clean.
 
 ### Regression Tests
 
-Show what existing IDE functionality was tested.
+- C/C++/Python batch execution with stdin (compile, run, errors, timeout, stop) — PASS.
+- Compile-error and runtime-error statuses and error-line pointers — PASS.
+- Editor Run/Stop/Output/Errors flows, status bar states — PASS.
+- Concurrency and user isolation (T9), rate limits (5/min per user) still enforced.
 
 ### Remaining Issues
 
-List anything that could not be fixed or tested.
+- Python `input('...')` prompts are written by CPython to **stderr** (fd 2), so they now appear in the
+  errors stream (mirrored into the terminal). This is faithful terminal behavior.
+- Interactive sessions are bounded by the per-user execution rate limit, not a global cap; a global
+  cap on simultaneous interactive containers is documented in `scalability-report.md` as a future
+  hardening option.
 
 IMPORTANT:
 

@@ -49,10 +49,11 @@ input via fifo; Stop → docker rm -f.
 |---|---|---|
 | **4 parallel queue workers** (configurable `WORKER_PROCS`, `--max-jobs=200` leak hygiene) | `docker-compose.yml` | 4 sandboxes in parallel → 30-run spike clears in ~8× less wall time. Scale to cores × 0.75. |
 | Job `--timeout=90` | `docker-compose.yml` | Exceeds sandbox wall clock + compile + pull headroom; prevents worker kill mid-run. |
-| **PHP-FPM pool: 12 children, dynamic, `max_requests=500`, 65s terminate, slowlog 3s** | `docker/backend/www.conf` (new, mounted `:ro`) | Absorbs poll storms; slowlog surfaces slow queries during class. |
+| **PHP-FPM pool: 12 children, dynamic, `max_requests=500`, 90s terminate, slowlog 3s** | `docker/backend/www.conf` (new, mounted `:ro`) | Absorbs poll storms; slowlog surfaces slow queries during class. Terminate timeout later raised 65 s → 90 s to fit the 60 s interactive docker window + 20 s ready/rc handshake. |
 | MySQL memory cap 512M | `docker-compose.yml` | Protect sandbox host from DB runaway. |
 | **gzip** (json/js/css/svg, min 256B, level 5) | `docker/nginx/default.conf` | 3-5× smaller poll payloads; big win on classroom Wi-Fi. |
 | **Adaptive batch poll: 1.5s while `queued`, 400ms while `running`** | `frontend/src/services/executionService.ts` | Queued jobs can't start sooner however fast we poll; cuts spike API load ~3× with zero UX cost. |
+| **Interactive-session robustness (Phase 27): 60s docker-run window, container-death detection, real stderr channel, cleanup retry, one-shot batch fallback** | `backend/app/Services/DockerExecutionService.php`, `frontend/src/pages/Editor/EditorPage.tsx` | Prevents slow cold-starts from spamming `system_error`, gives real diagnostics for prod socket-permission failures, stops EBUSY workdir leaks, and guarantees a student always gets a result even if the interactive bridge never becomes ready. |
 
 **Security unchanged:** same sandbox flags, same rate limits, same auth — all performance work sits *outside* the trust boundary.
 

@@ -349,6 +349,47 @@ The interactive-mode result loss (Finding 1) is the only error-handling defect.
 | **LOW** | For stdin EOF case, document behavior: "empty stdin = immediate EOF, provide input for interactive programs" |
 | **LOW** | Add a test for the interactive-mode race condition to the backend test suite |
 
+## Addendum — Interactive Terminal Hardening (Phase 27, Sept 2026)
+
+Follow-up to Finding 1 and the earlier interactive-mode fix. The interactive loop was re-hardened
+end-to-end and re-verified live against the full stack:
+
+| # | Scenario | Result |
+|---|----------|--------|
+| T1 | Python print-only interactive | PASS |
+| T2 | Python one `input()` — real prompt + value round-trip | PASS |
+| T3 | Python multiple `input()` | PASS |
+| T4 | Syntax error → `compile_error` | PASS |
+| T5 | Runtime error → `runtime_error` with real stderr traceback | PASS |
+| T6 | C two `scanf` | PASS |
+| T7 | C++ `cin` | PASS |
+| T8 | Batch Python stdin regression | PASS |
+| T9 | Two concurrent sessions — no cross-talk | PASS |
+| T10 | Stop → `stopped` | PASS |
+
+**Changes since the original report:**
+
+- `DockerExecutionService::startInteractive` — `docker run -d` Symfony timeout 15 s → **60 s** (the
+  15 s timeout turned slow-but-healthy cold-starts into generic `system_error`). Liveness is decided
+  by the container state, not by the Process timeout; failures are reported only when nothing actually
+  started, with real diagnostics via `containerLogs()` + permission/socket hints.
+- **Real stderr**: the sandbox runner now captures stderr to `/app/stderr.txt` (separate fd 2 pipe,
+  capped) and mirrors it into the terminal stream — runtime errors and prompts are no longer lost or
+  indistinguishable from stdout.
+- `cleanup()` retry (10 × 100 ms) fixes an `EBUSY` workdir leak when `finalize()` raced the `--rm`
+  container unmount of `/app`. Verified: **0 leftover workdirs / 0 leftover containers** after the
+  full suite.
+- Frontend `runBatch(continueSession)` extraction: an interactive start that fails or finalizes
+  prematurely degrades to a **one-shot batch run** (never re-enters the interactive branch), preserving
+  the student's typed input as stdin.
+- `docker-compose.yml` + `.env.example`: `EXECUTION_INTERACTIVE_TIMEOUT=120` made explicit.
+- `docker/backend/www.conf`: `request_terminate_timeout` 65 s → **90 s** (covers 60 s docker window +
+  20 s ready/rc handshake; mirrors the *scalability-report* FPM row).
+
+This closes the interactive-mode result-loss finding: the `readSessionState` idempotency fix (Finding 1)
+plus the above keep final stdout/stderr/exit_code correct across provideInput → poll → finalize → later
+polls. `php -l`, `tsc -b`, and oxlint all clean after the change.
+
 ## Conclusion
 
 **The CodeRunner IDE is reliable enough for students learning C, C++, and Python.** The compilation/execution pipeline, sandbox isolation, error reporting, and API all pass 100% of valid test cases. The one critical defect found — **interactive-mode output loss on final input** — has been **fixed and re-verified**. Remaining items are the PWA install requirement (production build step) and a hardening opportunity for the bind mount.
