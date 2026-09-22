@@ -14,7 +14,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'toast.finished_in': 'Finished in {time}',
     'toast.execution_failed': 'Execution failed',
     'toast.couldnt_run': "Couldn't run your code right now.",
-    'toast.offline_cant_run': "You're offline. Code execution requires an internet connection.",
+    'toast.offline_cant_run': "You're offline. Python can still run on this device; C and C++ need a connection.",
     'toast.file_created': 'File created',
     'toast.failed_create_file': 'Failed to create file',
     'toast.file_deleted': 'File deleted',
@@ -368,8 +368,14 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Offline banner
     'offline.heading': "You're offline",
-    'offline.desc': 'code & saved drafts keep working',
+    'offline.desc': 'editing, saving and Python runs keep working on this device',
     'offline.retry': 'Retry',
+    'offline.syncing': 'Syncing local changes\u2026',
+    'offline.syncing_desc': 'unsaved changes are being uploaded',
+    'offline.conflicts': '{n} file(s) changed on the server while you were offline',
+    'offline.keep_server': 'Use server',
+    'offline.keep_local': 'Keep mine',
+    'offline.pending_changes': '{n} local change(s) waiting to sync',
 
     // Install PWA
     'install.button': 'Install app',
@@ -499,6 +505,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'toast.failed_rename_project': 'Failed to rename project',
     'toast.install_blocked': 'Install pop-up blocked',
     'toast.install_blocked_desc': "In Chrome, clear this site's data (\u22ee \u2192 Site settings \u2192 Clear data), reopen, then tap \"Install app\".",
+    'toast.offline_python_not_ready': 'Offline Python is not downloaded on this device yet. Connect to the internet, run any Python code once, then it will be available offline.',
 
     // Settings additions
     'settings.no_email_plain': 'No email',
@@ -519,7 +526,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'toast.finished_in': 'បញ្ចប់ក្នុងរយៈពេល {time}',
     'toast.execution_failed': 'ការដំណើរការបានបរាជ័យ',
     'toast.couldnt_run': 'មិនអាចដំណើរការកូដរបស់អ្នកបាននៅពេលនេះ។',
-    'toast.offline_cant_run': "អ្នកកំពុង offline ការដំណើរការកូដទាមទារការតភ្ជាប់អ៊ីនធឺណិត។",
+    'toast.offline_cant_run': "អ្នកកំពុង offline ការដំណើរការកូដ Python នៅតែអាចដំណើរការនៅលើឧបករណ៍នេះ តែ C និង C++ ត្រូវការអ៊ីនធឺណិត។",
     'toast.file_created': 'បានបង្កើតឯកសារ',
     'toast.failed_create_file': 'បរាជ័យក្នុងការបង្កើតឯកសារ',
     'toast.file_deleted': 'បានលុបឯកសារ',
@@ -873,8 +880,14 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Offline banner
     'offline.heading': 'អ្នកកំពុង offline',
-    'offline.desc': 'កូដនិងសេចក្តីព្រាងដែលបានរក្សាទុកនៅតែដំណើរការ',
+    'offline.desc': 'ការកែសម្រួល ការរក្សាទុក និងការដំណើរការ Python នៅតែដំណើរការនៅលើឧបករណ៍នេះ',
     'offline.retry': 'ព្យាយាមម្តងទៀត',
+    'offline.syncing': 'កំពុង sync ការផ្លាស់ប្តូរក្នុងស្រុក\u2026',
+    'offline.syncing_desc': 'ការផ្លាស់ប្តូរដែលមិនទាន់រក្សាទុកកំពុងត្រូវបានផ្ទុកឡើង',
+    'offline.conflicts': '{n} ឯកសារបានផ្លាស់ប្តូរនៅលើម៉ាស៊ីនមេ ខណៈដែលអ្នកកំពុង offline',
+    'offline.keep_server': 'ប្រើ server',
+    'offline.keep_local': 'រក្សារបស់ខ្ញុំ',
+    'offline.pending_changes': '{n} ការផ្លាស់ប្តូរក្នុងស្រុកកំពុងរង់ចាំ sync',
 
     // Install PWA
     'install.button': 'ដំឡើងកម្មវិធី',
@@ -1000,6 +1013,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'toast.failed_rename_project': 'បរាជ័យក្នុងការដាក់ឈ្មោះគម្រោងឡើងវិញ',
     'toast.install_blocked': 'ការដំឡើងត្រូវបានរារាំង',
     'toast.install_blocked_desc': 'នៅក្នុង Chrome សូមសម្អាតទិន្នន័យគេហទំព័រនេះ (\u22ee \u2192 Site settings \u2192 Clear data) បើកឡើងវិញ បន្ទាប់មកចុច "Install app"។',
+    'toast.offline_python_not_ready': 'Offline Python មិនទាន់ត្រូវបានទាញយកនៅលើឧបករណ៍នេះទេ។ សូមភ្ជាប់អ៊ីនធឺណិត ដំណើរការកូដ Python មួយដងសិន បន្ទាប់មកវានឹងមានសម្រាប់ប្រើ offline។',
 
     // Settings additions
     'settings.no_email_plain': 'គ្មានអ៊ីមែល',

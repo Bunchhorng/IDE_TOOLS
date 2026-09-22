@@ -40,6 +40,21 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        globIgnores: ['**/pyodide/**'],
+        runtimeCaching: [
+          {
+            urlPattern: /\/pyodide\/.*/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'pyodide-assets',
+              expiration: {
+                maxEntries: 24,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],

@@ -7,8 +7,7 @@ import { Icon } from '../../components/ui/Icon';
 import { cn } from '../../lib/cn';
 import { TEMPLATES, getTemplateContent, type TemplateId } from '../../lib/templates';
 import { LanguageIcon } from '../../components/LanguageIcon';
-import { projectService } from '../../services/projectService';
-import { fileService } from '../../services/fileService';
+import { offlineService } from '../../lib/offline/service';
 import { useToast } from '../../context/ToastContext';
 import { useI18n, type TranslationKey } from '../../i18n';
 
@@ -53,11 +52,11 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
     setSubmitting(true);
     setError('');
     try {
-      const projectResponse = await projectService.create({ name: name.trim(), description: description.trim() || undefined });
+      const projectResponse = await offlineService.createProject({ name: name.trim(), description: description.trim() || undefined });
       const project = projectResponse.data;
       const content = getTemplateContent(language, template);
       try {
-        await fileService.create(project.slug, { filename, language, content });
+        await offlineService.createFile(project.slug, { filename, language, content });
       } catch {
         /* file creation is optional; keep project only */
       }

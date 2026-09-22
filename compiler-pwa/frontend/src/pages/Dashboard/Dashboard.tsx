@@ -17,8 +17,8 @@ import { Icon } from '../../components/ui/Icon';
 import { LanguageIcon, type LangGlyph } from '../../components/LanguageIcon';
 import { InstallPWAButton } from '../../components/InstallPWAButton';
 import { timeAgo, formatExecutionTime } from '../../lib/format';
-import { projectService } from '../../services/projectService';
 import { executionService } from '../../services/executionService';
+import { offlineService } from '../../lib/offline/service';
 import { useI18n } from '../../i18n';
 import type { Project, Execution } from '../../types';
 
@@ -54,7 +54,7 @@ export default function Dashboard() {
   const loadProjects = useCallback(async (p: number, append = false) => {
     setLoadingProjects(true);
     try {
-      const response = await projectService.getAll(p);
+      const response = await offlineService.listProjects(p);
       const data = response.data;
       setProjects((prev) => (append ? [...prev, ...data.data] : data.data));
       setTotal(data.total);
@@ -107,7 +107,7 @@ export default function Dashboard() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await projectService.delete(deleteTarget.slug);
+      await offlineService.deleteProject(deleteTarget.slug);
       setProjects((ps) => ps.filter((p) => p.id !== deleteTarget.id));
       setTotal((t) => Math.max(0, t - 1));
       toast.success(t('toast.project_deleted'), deleteTarget.name);
@@ -129,7 +129,7 @@ export default function Dashboard() {
     if (!renameTarget || !renameValue.trim()) return;
     setRenaming(true);
     try {
-      const response = await projectService.update(renameTarget.slug, { name: renameValue.trim() });
+      const response = await offlineService.updateProject(renameTarget.slug, { name: renameValue.trim() });
       const patch = response.data;
       setProjects((ps) => ps.map((p) => (p.id === patch.id ? { ...p, ...patch } : p)));
       toast.success(t('toast.project_renamed'), patch.name);

@@ -6,6 +6,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { PreferencesProvider } from './context/PreferencesContext';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider } from './context/AuthContext';
+import { OfflineSyncProvider } from './context/OfflineSyncContext';
 import { I18nProvider } from './i18n';
 
 // Monaco Editor worker setup for Vite
@@ -40,11 +41,13 @@ createRoot(document.getElementById('root')!).render(
     <I18nProvider>
       <ThemeProvider>
         <PreferencesProvider>
-          <ToastProvider>
+<ToastProvider>
+          <OfflineSyncProvider>
             <AuthProvider>
               <App />
             </AuthProvider>
-          </ToastProvider>
+          </OfflineSyncProvider>
+        </ToastProvider>
         </PreferencesProvider>
       </ThemeProvider>
     </I18nProvider>

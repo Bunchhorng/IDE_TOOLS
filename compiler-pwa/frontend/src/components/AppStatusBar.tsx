@@ -1,12 +1,12 @@
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { useOnline } from '../hooks/useOnline';
+import { useOfflineSync } from '../context/OfflineSyncContext';
 import { useI18n } from '../i18n';
 import { cn } from '../lib/cn';
 import { Icon } from './ui/Icon';
 
 export function AppStatusBar() {
-  const online = useOnline();
+  const { online, syncState, pendingCount } = useOfflineSync();
   const { user, isAuthenticated, isGuest } = useAuth();
   const { theme, toggle } = useTheme();
   const { locale, setLocale, t } = useI18n();
@@ -20,6 +20,13 @@ export function AppStatusBar() {
     : isGuest || !user?.name
       ? t('settings.guest')
       : user.name;
+
+  const pendingLabel =
+    syncState === 'syncing'
+      ? t('offline.syncing')
+      : pendingCount > 0
+        ? t('offline.pending_changes', { n: pendingCount })
+        : null;
 
   return (
     <footer className="flex h-8 shrink-0 items-center gap-3 border-t border-edge bg-panel px-3 pb-[env(safe-area-inset-bottom)] text-[11px] text-mute sm:px-4">
@@ -48,6 +55,24 @@ export function AppStatusBar() {
           <Icon name="shield" size={12} strokeWidth={2} className="text-primary/70" />
           {t('appbar.brand')}
         </span>
+
+        {pendingLabel && (
+          <>
+            <span className="hidden h-3 w-px bg-edge md:block" aria-hidden="true" />
+            <span
+              className={cn(
+                'hidden items-center gap-1.5 md:inline-flex',
+                syncState === 'syncing' ? 'text-primary' : 'text-warning',
+              )}
+              title={pendingLabel}
+            >
+              {syncState === 'syncing' && (
+                <Icon name="refresh" size={11} className="animate-spin" />
+              )}
+              <span className="max-w-36 truncate">{pendingLabel}</span>
+            </span>
+          </>
+        )}
       </div>
 
       <div className="ml-auto flex min-w-0 items-center gap-2.5">

@@ -30,12 +30,12 @@ import { useToast } from '../../context/ToastContext';
 import { usePreferences } from '../../context/PreferencesContext';
 import { useI18n } from '../../i18n';
 import { setSuppress401Reload } from '../../services/api';
-import { projectService } from '../../services/projectService';
-import { fileService } from '../../services/fileService';
-import { folderService } from '../../services/folderService';
 import { executionService } from '../../services/executionService';
 import { languageService } from '../../services/languageService';
-import type { Project, File, Folder, Language, Execution } from '../../types';
+import { offlineService } from '../../lib/offline/service';
+import { runPython, preparePython, pythonReady } from '../../lib/offline/python';
+import { useOfflineSync } from '../../context/OfflineSyncContext';
+import type { Project, File, Folder, Language, Execution, ExecutionStatus } from '../../types';
 
 type MobileTab = 'code' | 'files' | 'output' | 'more';
 
@@ -46,6 +46,7 @@ export default function EditorPage() {
   const toast = useToast();
   const { prefs, updatePrefs } = usePreferences();
   const { t } = useI18n();
+  const { online } = useOfflineSync();
 
   const editorContainerRef = usePinchZoom<HTMLDivElement>(
     () => prefs.fontSize,
@@ -160,7 +161,7 @@ export default function EditorPage() {
   const loadProject = useCallback(async () => {
     if (!projectSlug) return;
     try {
-      const response = await projectService.getBySlug(projectSlug);
+      const response = await offlineService.getProject(projectSlug);
       setProject(response.data);
     } catch {
       toast.error(t('toast.project_not_found'));
@@ -171,7 +172,7 @@ export default function EditorPage() {
   const loadFiles = useCallback(async () => {
     if (!projectSlug) return;
     try {
-      const response = await fileService.getByProject(projectSlug);
+      const response = await offlineService.getFiles(projectSlug);
       setFiles(response.data);
       if (response.data.length > 0) {
         const first = response.data[0];
@@ -190,7 +191,7 @@ export default function EditorPage() {
   const loadFolders = useCallback(async () => {
     if (!projectSlug) return;
     try {
-      const response = await folderService.getByProject(projectSlug);
+      const response = await offlineService.getFolders(projectSlug);
       setFolders(response.data);
     } catch {
       /* folders are optional */
@@ -212,6 +213,18 @@ export default function EditorPage() {
     void loadFolders();
     void loadLanguages();
   }, [loadProject, loadFiles, loadFolders, loadLanguages]);
+
+  useEffect(() => {
+    const onConflictsResolved = () => {
+      if (!projectSlug) return;
+      void offlineService
+        .getFiles(projectSlug)
+        .then((resp) => setFiles(resp.data))
+        .catch(() => undefined);
+    };
+    window.addEventListener('coderunner:conflict-resolved', onConflictsResolved);
+    return () => window.removeEventListener('coderunner:conflict-resolved', onConflictsResolved);
+  }, [projectSlug]);
 
   const selectedLanguage = activeFile?.language ?? languages[0]?.slug ?? 'cpp';
 
@@ -271,7 +284,7 @@ export default function EditorPage() {
     if (!activeFile || !dirty) return true;
     setIsSaving(true);
     try {
-      const response = await fileService.update(activeFile.id, {
+      const response = await offlineService.updateFile(activeFile.id, {
         content: activeFile.content,
         language: activeFile.language,
       });
@@ -540,12 +553,68 @@ export default function EditorPage() {
       setStdin('');
     }
     if (dirty) await handleSave();
-    // Execution needs the backend: never fire a doomed request while offline.
-    // `navigator.onLine` is the same truth source OfflineBanner / useOnline
-    // rely on — this gate guarantees an honest terminal message instead of a
-    // raw Chrome "Network Error" (and never a fake success).
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    // Offline: local execution only — Python runs on-device via Pyodide;
+    // C/C++ needs the backend sandbox, so surface an honest terminal message.
+    if (!online) {
       isRunningRef.current = false;
+      if (selectedLanguage === 'python') {
+        setIsRunning(true);
+        setExecution(null);
+        try {
+          const result = await runPython(activeFile.content, finalStdin);
+          const status: ExecutionStatus =
+            result.status === 'success'
+              ? 'success'
+              : result.status === 'runtime_error'
+                ? 'runtime_error'
+                : result.status;
+          const now = new Date().toISOString();
+          setExecution({
+            id: 0,
+            user_id: project?.user_id ?? 0,
+            project_id: project.id,
+            file_id: activeFile.id,
+            language_id: 0,
+            status,
+            source_code: activeFile.content,
+            stdin: finalStdin || null,
+            stdout: result.stdout,
+            stderr: result.stderr,
+            exit_code: result.exitCode,
+            execution_time: null,
+            memory_usage: null,
+            created_at: now,
+            updated_at: now,
+          });
+          if (status === 'runtime_error' && isInputStarved(result.stderr)) {
+            awaitingInputRef.current = true;
+          }
+        } catch {
+          const offlineMsg = t('toast.offline_python_not_ready');
+          const now = new Date().toISOString();
+          setExecution({
+            id: 0,
+            user_id: project?.user_id ?? 0,
+            project_id: project.id,
+            file_id: activeFile.id,
+            language_id: 0,
+            status: 'system_error',
+            source_code: activeFile.content,
+            stdin: finalStdin || null,
+            stdout: '',
+            stderr: offlineMsg,
+            exit_code: null,
+            execution_time: null,
+            memory_usage: null,
+            created_at: now,
+            updated_at: now,
+          });
+          toast.error(offlineMsg);
+        } finally {
+          setIsRunning(false);
+        }
+        return;
+      }
       const offlineMsg = t('toast.offline_cant_run');
       setExecution({
         id: 0,
@@ -572,6 +641,11 @@ export default function EditorPage() {
     setExecution(null);
     try {
       setSuppress401Reload(true);
+      if (selectedLanguage === 'python') {
+        void pythonReady().then((ready) => {
+          if (!ready) void preparePython();
+        });
+      }
       const response = await executionService.execute({
         language: selectedLanguage,
         project_id: project.id,
@@ -639,7 +713,7 @@ export default function EditorPage() {
 
     // Interactive C/C++/Python with input reads: keep the sandbox running and
     // send answers one line at a time, so menu loops and multi-step prompts work.
-    if (interactiveEligible && !continueSession) {
+    if (online && interactiveEligible && !continueSession) {
       try {
         if (dirty) await handleSave();
         setIsRunning(true);
@@ -803,7 +877,7 @@ export default function EditorPage() {
           const saved = await handleSave();
           if (!saved) return;
         }
-        const response = await fileService.create(projectSlug, {
+        const response = await offlineService.createFile(projectSlug, {
           folder_id: folderId,
           filename,
           language,
@@ -825,7 +899,7 @@ export default function EditorPage() {
     void (async () => {
       try {
         if (!projectSlug) return;
-        const response = await folderService.create(projectSlug, { name, parent_id: parentId });
+        const response = await offlineService.createFolder(projectSlug, { name, parent_id: parentId });
         setFolders((fs) => [...fs, response.data]);
         toast.success(t('toast.folder_created'), name);
       } catch {
@@ -844,7 +918,7 @@ export default function EditorPage() {
     const { kind, item } = deleteTarget;
     try {
       if (kind === 'file') {
-        await fileService.delete(item.id);
+        await offlineService.deleteFile(item.id);
         const next = files.filter((f) => f.id !== item.id);
         setFiles(next);
         setOpenFileIds((ids) => ids.filter((id) => id !== item.id));
@@ -859,7 +933,7 @@ export default function EditorPage() {
           for (const f of folders) if (f.parent_id === id) collect(f.id);
         };
         collect((item as Folder).id);
-        await folderService.delete(item.id);
+        await offlineService.deleteFolder(item.id);
         setFolders((fs) => fs.filter((f) => !removed.has(f.id)));
         const nextFiles = files.filter((f) => !(f.folder_id !== null && removed.has(f.folder_id)));
         setFiles(nextFiles);
@@ -890,7 +964,7 @@ export default function EditorPage() {
         // otherwise Run feeds the file to the wrong compiler. Keep the current
         // language when the new extension isn't a code one (e.g. `.txt`).
         const desiredLanguage = detectLanguage(newName);
-        const response = await fileService.update(file.id, {
+        const response = await offlineService.updateFile(file.id, {
           filename: newName,
           ...(desiredLanguage && desiredLanguage !== file.language ? { language: desiredLanguage } : {}),
         });
@@ -914,7 +988,7 @@ export default function EditorPage() {
   const handleRenameFolder = (folder: Folder, newName: string) => {
     void (async () => {
       try {
-        const response = await folderService.update(folder.id, { name: newName });
+        const response = await offlineService.updateFolder(folder.id, { name: newName });
         const patch = { name: response.data.name, updated_at: response.data.updated_at };
         setFolders((fs) => fs.map((f) => (f.id === folder.id ? { ...f, ...patch } : f)));
         toast.success(t('toast.renamed'), newName);
@@ -927,7 +1001,7 @@ export default function EditorPage() {
   const handleMoveFile = (file: File, folderId: number | null) => {
     void (async () => {
       try {
-        const response = await fileService.update(file.id, { folder_id: folderId });
+        const response = await offlineService.updateFile(file.id, { folder_id: folderId });
         const patch = { folder_id: response.data.folder_id, updated_at: response.data.updated_at };
         setFiles((fs) => fs.map((f) => (f.id === file.id ? { ...f, ...patch } : f)));
         toast.success(t('toast.moved'), file.filename);
@@ -940,7 +1014,7 @@ export default function EditorPage() {
   const handleMoveFolder = (folder: Folder, parentId: number | null) => {
     void (async () => {
       try {
-        const response = await folderService.update(folder.id, { parent_id: parentId });
+        const response = await offlineService.updateFolder(folder.id, { parent_id: parentId });
         const patch = { parent_id: response.data.parent_id, updated_at: response.data.updated_at };
         setFolders((fs) => fs.map((f) => (f.id === folder.id ? { ...f, ...patch } : f)));
         toast.success(t('toast.moved'), folder.name);

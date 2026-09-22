@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { User } from '../types';
 import { authService } from '../services/authService';
+import { setIdentity, getIdentity, clearIdentity } from '../lib/offline/service';
+import { isNetworkError } from '../lib/offline/sync';
 
 interface AuthContextValue {
   user: User | null;
@@ -31,15 +33,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const checkingRef = useRef(false);
 
+  const restoreCachedIdentity = useCallback((): boolean => {
+    const cached = getIdentity();
+    if (cached) {
+      setUser(cached.user);
+      return true;
+    }
+    return false;
+  }, []);
+
   const ensureGuestSession = useCallback(async () => {
     try {
       const response = await authService.guest();
       authService.setToken(response.data.token);
       setUser(response.data.user);
-    } catch {
-      /* offline — leave unauthenticated; protected routes handle it */
+      setIdentity(response.data.user);
+    } catch (err) {
+      if (isNetworkError(err) && restoreCachedIdentity()) {
+        /* offline boot from the cached identity */
+      }
     }
-  }, []);
+  }, [restoreCachedIdentity]);
 
   const checkAuth = useCallback(async () => {
     if (checkingRef.current) return;
@@ -55,15 +69,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await authService.me();
       setUser(response.data);
+      setIdentity(response.data);
       setIsLoading(false);
-    } catch {
-      authService.clearToken();
-      await ensureGuestSession();
-      setIsLoading(false);
+    } catch (err) {
+      if (isNetworkError(err) && restoreCachedIdentity()) {
+        // keep the token and cached user — a reconnect later can sync
+        setIsLoading(false);
+      } else {
+        authService.clearToken();
+        await ensureGuestSession();
+        setIsLoading(false);
+      }
     } finally {
       checkingRef.current = false;
     }
-  }, [ensureGuestSession]);
+  }, [ensureGuestSession, restoreCachedIdentity]);
 
   useEffect(() => {
     void checkAuth();
@@ -73,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await authService.login({ email, password });
     authService.setToken(response.data.token);
     setUser(response.data.user);
+    setIdentity(response.data.user);
     setIsLoading(false);
     return response.data;
   };
@@ -91,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     authService.setToken(response.data.token);
     setUser(response.data.user);
+    setIdentity(response.data.user);
     setIsLoading(false);
     return response.data;
   };
@@ -108,6 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password_confirmation: passwordConfirmation,
     });
     setUser(response.data.user);
+    setIdentity(response.data.user);
     return response.data.user;
   };
 
@@ -118,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       /* token may already be invalid server-side */
     } finally {
       authService.clearToken();
+      clearIdentity();
       setUser(null);
       setIsLoading(false);
       await ensureGuestSession();
