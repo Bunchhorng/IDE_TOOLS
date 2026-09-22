@@ -22,7 +22,7 @@ export function ZoomControl({ className }: { className?: string }) {
   };
 
   const btnClass =
-    'inline-flex h-6.5 w-6.5 items-center justify-center rounded-md text-mute transition-colors hover:bg-raised hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-panel disabled:text-faint disabled:hover:bg-transparent';
+    'inline-flex h-8 w-8 items-center justify-center rounded-md text-mute transition-colors hover:bg-raised hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-panel disabled:text-faint disabled:hover:bg-transparent sm:h-6.5 sm:w-6.5';
 
   return (
     <span className={cn('inline-flex items-center gap-1', className)}>

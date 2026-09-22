@@ -32,7 +32,7 @@ const SIZES: Record<ButtonSize, string> = {
   sm: 'h-8 px-3 text-[13px] gap-1.5 rounded-md',
   md: 'h-9.5 px-4 text-sm gap-2 rounded-lg',
   lg: 'h-11 px-5 text-sm gap-2 rounded-lg',
-  icon: 'h-9 w-9 rounded-lg',
+  icon: 'h-10 w-10 rounded-lg sm:h-9 sm:w-9',
 };
 
 /**

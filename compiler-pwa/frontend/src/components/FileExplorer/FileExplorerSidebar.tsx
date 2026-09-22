@@ -297,7 +297,7 @@ export function FileExplorerSidebar({
         type="button"
         aria-label={t('explorer.options_for', { name: label })}
         onClick={() => setMenuSheet({ kind, node })}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-faint transition-colors hover:text-ink active:bg-raised lg:h-6 lg:w-6"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-faint transition-colors hover:text-ink active:bg-raised lg:h-6 lg:w-6"
       >
         <Icon name="moreV" size={17} />
       </button>
@@ -308,7 +308,7 @@ export function FileExplorerSidebar({
           <button
             type="button"
             aria-label={t('explorer.options_for', { name: label })}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-faint transition-colors hover:text-ink active:bg-raised lg:h-6 lg:w-6"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-faint transition-colors hover:text-ink active:bg-raised lg:h-6 lg:w-6"
           >
             <Icon name="moreV" size={14} />
           </button>

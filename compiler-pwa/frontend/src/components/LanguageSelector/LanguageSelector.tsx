@@ -32,7 +32,7 @@ export default function LanguageSelector({
       onClick={() => setOpen((o) => !o)}
       className={cn(
         'inline-flex items-center gap-2 overflow-hidden rounded-lg border border-edge bg-panel text-[13px] font-medium text-ink transition-colors hover:border-edge-strong',
-        compact ? 'h-8 max-w-[38vw] px-2.5 sm:max-w-none' : 'h-9 px-3',
+        compact ? 'h-9 max-w-[38vw] px-2.5 sm:h-8 sm:max-w-none' : 'h-9 px-3',
       )}
       aria-haspopup="listbox"
       aria-expanded={open}

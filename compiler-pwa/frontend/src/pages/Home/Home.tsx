@@ -83,7 +83,7 @@ export default function Home() {
       <main>
         <section className="mx-auto max-w-6xl px-4 pt-16 sm:px-6 sm:pt-24">
           <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-            <div>
+            <div className="min-w-0">
               <span className="relative mb-5 inline-flex items-center gap-2 rounded-full border border-edge bg-panel px-3 py-1 text-xs font-medium text-mute">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-success opacity-75" />
@@ -108,7 +108,7 @@ export default function Home() {
                 </Link>
                 <InstallPWAButton variant="outline" size="lg" />
               </div>
-              <div className="mt-8 flex items-center gap-5">
+              <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2">
                 <div>
                   <p className="text-lg font-bold text-ink">{t('home.lang_list')}</p>
                   <p className="text-xs text-faint">{t('home.lang_subtitle')}</p>
@@ -121,7 +121,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="relative">
+<div className="relative min-w-0">
               <div className="absolute -inset-6 -z-10 rounded-3xl bg-primary/5 blur-2xl" aria-hidden="true" />
               <CodeWindow passedLabel={t('status.success')} />
               <div className="mt-4 flex items-center rounded-lg border border-edge bg-panel px-4 py-2.5 text-xs text-mute">
