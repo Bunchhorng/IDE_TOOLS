@@ -69,7 +69,7 @@ const ERROR_TITLE_KEYS: Partial<Record<ExecutionStatus, TranslationKey>> = {
   failed: 'status.failed',
 };
 
-/** Status heading: English label, Khmer label underneath, line chip. */
+/** Status heading: red indicator, English label, Khmer label, line chip. */
 function BilingualErrorTitle({
   status,
   line,
@@ -83,17 +83,25 @@ function BilingualErrorTitle({
   const key = status ? ERROR_TITLE_KEYS[status] : undefined;
   if (!key) return null;
   return (
-    <div className="mb-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-      <div>
-        <p className="text-[15px] font-semibold leading-tight text-error lg:text-[13px]">{translations.en[key] ?? key}</p>
-        <p className="mt-0.5 text-[12px] leading-snug text-error/60 lg:text-[11px]">{translations.km[key] ?? translations.en[key]}</p>
-      </div>
+    <div className="mb-2 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
+      <span className="flex min-w-0 items-start gap-1.5">
+        <Icon name="alertCircle" size={15} className="mt-0.5 shrink-0 text-error" />
+        <span className="min-w-0 flex-1">
+          <p className="wrap-anywhere text-[15px] font-semibold leading-tight text-error lg:text-[13px]">
+            {translations.en[key] ?? key}
+          </p>
+          <p className="mt-0.5 wrap-anywhere text-[12px] leading-snug text-error/60 lg:text-[11px]">
+            {translations.km[key] ?? translations.en[key]}
+          </p>
+        </span>
+      </span>
       {line !== undefined && (
         <button
           type="button"
           onClick={() => onGoToLine?.(line)}
+          aria-label={`${t('terminal.go_to_line')} ${line}`}
           title={t('terminal.go_to_line')}
-          className="inline-flex items-center gap-1 rounded bg-error/10 px-2 py-1 text-[11px] font-medium text-error/80 transition-colors hover:bg-error/20 hover:text-error lg:px-1.5 lg:py-0.5 lg:text-[10px]"
+          className="inline-flex min-h-9 items-center gap-1 rounded bg-error/10 px-2 py-1 text-[11px] font-medium text-error/80 transition-colors hover:bg-error/20 hover:text-error lg:min-h-0 lg:px-1.5 lg:py-0.5 lg:text-[10px]"
         >
           <Icon name="arrowRight" size={11} />
           line {line}
@@ -101,6 +109,15 @@ function BilingualErrorTitle({
       )}
     </div>
   );
+}
+
+/** Split "Title — explanation" hints into a short cause headline and a separate
+ *  explanation paragraph so the card reads like the reference structure. */
+function splitHint(text: string): { title: string; body: string } {
+  const marker = ' — ';
+  const i = text.indexOf(marker);
+  if (i === -1) return { title: text, body: '' };
+  return { title: text.slice(0, i), body: text.slice(i + marker.length) };
 }
 
 /** Friendly bilingual explanation, the offending source line, actions + the raw error underneath. */
@@ -119,6 +136,7 @@ function ErrorDetails({
   onApplyFix?: (line: number, apply: (code: string) => string) => void;
   onFocusConsole?: () => void;
 }) {
+  const { t } = useI18n();
   if (!execution?.stderr) return null;
   const hint = explainError(execution.stderr, execution.status, activeLanguage ?? execution.language?.slug);
   const errLine = hint?.line;
@@ -126,68 +144,119 @@ function ErrorDetails({
     errLine !== undefined && fileContent
       ? (fileContent.split('\n')[errLine - 1] ?? '').trimEnd()
       : undefined;
+  const enHint = hint ? splitHint(hint.en) : null;
+  const kmHint = hint ? splitHint(hint.km) : null;
+  const rawKey = execution.status ? ERROR_TITLE_KEYS[execution.status] : undefined;
+  const rawStatusLabel = rawKey ? (translations.en[rawKey] ?? rawKey) : undefined;
 
   return (
-    <div className="space-y-2.5">
-      {hint && (
-        <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2.5">
-          <div className="flex items-start gap-2">
+    <div className="min-w-0 max-w-full space-y-3">
+      {hint && enHint && kmHint && (
+        <div
+          role="alert"
+          className="min-w-0 max-w-full rounded-md border border-warning/30 bg-warning/10 px-3 py-3 sm:px-3.5"
+        >
+          <div className="flex min-w-0 items-start gap-2">
             <Icon name="alertTriangle" size={15} className="mt-0.5 shrink-0 text-warning" />
-            <div className="min-w-0 flex-1 text-[13px] leading-relaxed lg:text-[12px]">
-              <p className="text-ink">{hint.en}</p>
-              <p className="mt-0.5 text-mute">{hint.km}</p>
+            <div className="min-w-0 flex-1">
+              <p className="wrap-anywhere text-[13px] font-semibold leading-snug text-ink sm:text-[12.5px]">
+                {enHint.title}
+              </p>
+              <p className="mt-0.5 wrap-anywhere text-[12px] leading-snug text-mute sm:text-[11px]">
+                {kmHint.title}
+              </p>
 
-              {srcLine !== undefined && srcLine.trim() !== '' && (
-                <pre className="mt-2 overflow-x-auto rounded border border-edge bg-editor px-2.5 py-1.5 text-[13px] text-ink lg:text-[12px]">
-                  <span className="mr-2 select-none text-error/70">{errLine} │</span>
-                  {srcLine}
-                </pre>
+              {enHint.body && (
+                <div className="mt-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-faint">
+                    {translations.en['terminal.explanation']} · {translations.km['terminal.explanation']}
+                  </p>
+                  <p className="mt-0.5 wrap-anywhere text-[12.5px] leading-relaxed text-mute sm:text-[12px]">
+                    {enHint.body}
+                  </p>
+                  {kmHint.body && (
+                    <p className="mt-0.5 wrap-anywhere text-[12px] leading-relaxed text-mute/80 sm:text-[11px]">
+                      {kmHint.body}
+                    </p>
+                  )}
+                </div>
               )}
 
-              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              {srcLine !== undefined && srcLine.trim() !== '' && (
+                <div className="mt-2 min-w-0 max-w-full overflow-x-auto rounded border border-error/30 bg-editor">
+                  <pre className="min-w-max px-2.5 py-1.5 font-mono text-[13px] leading-relaxed text-ink lg:text-[12px]">
+                    <span className="mr-2 select-none text-error/70">{errLine} │</span>
+                    <span className="rounded-sm bg-error/10 px-0.5">{srcLine}</span>
+                  </pre>
+                </div>
+              )}
+
+              <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
                 {errLine !== undefined && onGoToLine && (
                   <button
                     type="button"
                     onClick={() => onGoToLine(errLine)}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-edge bg-raised px-3 py-1.5 text-[12px] font-medium text-mute transition-colors hover:text-ink lg:px-2.5 lg:py-1 lg:text-[11px]"
+                    aria-label={`${t('terminal.go_to_line')} ${errLine}`}
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-edge bg-raised px-3 py-2 text-[12px] font-medium text-mute transition-colors hover:text-ink sm:min-h-0 sm:py-1.5 lg:px-2.5 lg:text-[11px]"
                   >
                     <Icon name="arrowRight" size={12} />
                     {translations.en['terminal.go_to_line']}
                   </button>
                 )}
-                {hint.action === 'focus-input' && (
+                {hint.action === 'focus-input' && onFocusConsole && (
                   <button
                     type="button"
                     onClick={() => onFocusConsole?.()}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-info/40 bg-info/10 px-3 py-1.5 text-[12px] font-medium text-info transition-colors hover:bg-info/20 lg:px-2.5 lg:py-1 lg:text-[11px]"
+                    aria-label={t('terminal.type_input_now')}
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-info/40 bg-info/10 px-3 py-2 text-[12px] font-medium text-info transition-colors hover:bg-info/20 sm:min-h-0 sm:py-1.5 lg:px-2.5 lg:text-[11px]"
                   >
                     <Icon name="keyboard" size={12} />
                     {translations.en['terminal.type_input_now']}
                   </button>
                 )}
                 {hint.fix && errLine !== undefined && onApplyFix && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => onApplyFix(hint.fix!.line, hint.fix!.apply)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-success/40 bg-success/10 px-3 py-1.5 text-[12px] font-medium text-success transition-colors hover:bg-success/20 lg:px-2.5 lg:py-1 lg:text-[11px]"
-                    >
-                      <Icon name="wand" size={12} />
-                      {translations.en['terminal.quick_fix']} · {hint.fix.en}
-                    </button>
-                    <p className="w-full text-[11px] leading-snug text-mute/80 lg:text-[10px]">{hint.fix.km}</p>
-                  </>
+                  <button
+                    type="button"
+                    onClick={() => onApplyFix(hint.fix!.line, hint.fix!.apply)}
+                    aria-label={`${t('terminal.quick_fix')}: ${hint.fix.en}`}
+                    className="inline-flex w-full min-w-0 items-start gap-2 rounded-md border border-success/40 bg-success/10 px-3 py-2.5 text-left transition-colors hover:bg-success/20"
+                  >
+                    <Icon name="wand" size={14} className="mt-0.5 shrink-0 text-success" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12px] font-semibold text-success">
+                        {translations.en['terminal.quick_fix']} · {translations.km['terminal.quick_fix']}
+                      </span>
+                      <span className="mt-0.5 block wrap-anywhere text-[12px] leading-snug text-ink">
+                        {hint.fix.en}
+                      </span>
+                      <span className="mt-0.5 block wrap-anywhere text-[11px] leading-snug text-mute/80">
+                        {hint.fix.km}
+                      </span>
+                    </span>
+                  </button>
                 )}
               </div>
             </div>
           </div>
         </div>
       )}
-      <div>
-        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-faint">
-          {translations.en['terminal.raw_error']} · {translations.km['terminal.raw_error']}
-        </p>
-        <pre className="whitespace-pre-wrap text-error/90">{execution.stderr}</pre>
+
+      <div className="min-w-0 max-w-full">
+        <div className="mb-1 flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-faint">
+            {translations.en['terminal.raw_error']} · {translations.km['terminal.raw_error']}
+          </p>
+          {rawStatusLabel && (
+            <p className="uppercase" aria-hidden="true">
+              <span className="text-[10px] font-semibold tracking-wide text-error/70">{rawStatusLabel}</span>
+            </p>
+          )}
+        </div>
+        <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-edge bg-editor px-3 py-2 scrollbar-thin">
+          <pre className="min-w-max whitespace-pre font-mono text-[12px] leading-relaxed text-error/90 lg:text-[12px]">
+            {execution.stderr}
+          </pre>
+        </div>
       </div>
     </div>
   );
@@ -283,6 +352,18 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
   const tab = externalTab ?? internalTab;
   const setTab = onTabChange ?? setInternalTab;
   const [copied, setCopied] = useState(false);
+
+  /** Scroll container ref — exactly one scrollable body (terminal / output /
+   *  errors) is mounted at a time, so a single ref is safe to reuse. */
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  /** A freshly finished run replaces the session — jump to the bottom so the
+   *  result (and any error card) lands in view, like a real terminal. */
+  useEffect(() => {
+    if (!execution) return;
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [execution, tab]);
 
   /** xterm instance + fit addon, created/owned while a live session runs. */
   const termRef = useRef<Terminal | null>(null);
@@ -564,7 +645,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
    *  Only one tab is mounted at a time, so the shared host ref points at the
    *  visible one and the open-effect re-runs on tab switches. */
   const liveFrame = (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 w-full max-w-full min-w-0 flex-col pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
       <div ref={termHostRef} className="min-h-0 flex-1 overflow-hidden bg-editor px-3 py-3" />
       {(liveTruncated || execution?.truncated) && (
         <div className="m-3 mt-0 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] leading-snug text-mute">
@@ -578,8 +659,8 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-panel">
-      <div className="flex min-w-0 items-center justify-between border-b border-edge pr-1 lg:pr-2">
+    <div className="flex h-full min-h-0 w-full max-w-full min-w-0 flex-col bg-panel">
+      <div className="flex min-w-0 items-center justify-between gap-1 border-b border-edge pr-1 lg:pr-2">
         <Tabs<PanelTab>
           className="min-w-0 flex-1"
           tabs={[
@@ -602,7 +683,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
               onClick={onLiveStop}
               aria-label={t('terminal.stop_run')}
               title={t('terminal.stop_run')}
-              className="text-error transition-colors hover:bg-error/10"
+              className="min-h-10 min-w-10 text-error transition-colors hover:bg-error/10 sm:min-h-0 sm:min-w-0"
             >
               <Icon name="stop" size={15} />
             </Button>
@@ -614,10 +695,17 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
             disabled={!canClear}
             aria-label={t('terminal.clear')}
             title={t('terminal.clear')}
+            className="min-h-10 min-w-10 sm:min-h-0 sm:min-w-0"
           >
             <Icon name="trash" size={15} />
           </Button>
-          <Button variant="ghost" size="icon" onClick={handleCopy} aria-label={t('terminal.copy_output')}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleCopy}
+            aria-label={t('terminal.copy_output')}
+            className="min-h-10 min-w-10 sm:min-h-0 sm:min-w-0"
+          >
             <Icon name={copied ? 'check' : 'copy'} size={15} />
           </Button>
         </div>
@@ -628,8 +716,8 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
           liveActive ? (
             liveFrame
           ) : (
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="min-h-0 flex-1 overflow-auto bg-editor px-4 py-3.5 font-mono text-[15px] leading-relaxed scrollbar-thin lg:px-4 lg:py-3 lg:text-[13px]">
+            <div className="flex h-full min-h-0 max-w-full min-w-0 flex-col">
+              <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-auto bg-editor px-3 py-3 pb-[calc(5rem+env(safe-area-inset-bottom))] font-mono text-[15px] leading-relaxed scrollbar-thin sm:px-4 lg:px-4 lg:py-3 lg:pb-3 lg:text-[13px]">
                 {isRunning && (
                   <div className="flex items-center gap-2 text-info">
                     <span className="h-3 w-3 animate-spin rounded-full border-2 border-info border-t-transparent" />
@@ -640,7 +728,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
                 {session ? (
                   <TerminalSession segments={session} />
                 ) : (
-                  stdout && <pre className="whitespace-pre-wrap text-ink">{stdout}</pre>
+                  stdout && <pre className="whitespace-pre-wrap wrap-anywhere text-ink">{stdout}</pre>
                 )}
 
                 {execution?.truncated && (
@@ -653,7 +741,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
                 )}
 
                 {stderr && !waitingForInput && (
-                  <div className="mt-2">
+                  <div className="mt-2 min-w-0 max-w-full">
                     <BilingualErrorTitle
                       status={effectiveStatus}
                       line={explainError(stderr, execution?.status, activeLanguage ?? execution?.language?.slug)?.line}
@@ -699,7 +787,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
             </div>
           )
         ) : tab === 'errors' ? (
-          <div className="h-full overflow-auto bg-editor px-4 py-3 font-mono text-[15px] leading-relaxed scrollbar-thin lg:py-3 lg:text-[13px]">
+          <div ref={scrollRef} className="h-full min-w-0 max-w-full overflow-auto bg-editor px-3 py-3 pb-[calc(5rem+env(safe-area-inset-bottom))] font-mono text-[15px] leading-relaxed scrollbar-thin sm:px-4 lg:py-3 lg:pb-3 lg:text-[13px]">
             {isRunning && (
               <div className="flex items-center gap-2 text-info">
                 <span className="h-3 w-3 animate-spin rounded-full border-2 border-info border-t-transparent" />
@@ -724,23 +812,20 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
             )}
 
             {stderr && !waitingForInput && (
-              <div className="flex items-start gap-2">
-                <Icon name="alertTriangle" size={14} className="mt-0.5 shrink-0 text-error" />
-                <div className="min-w-0 flex-1">
-                  <BilingualErrorTitle
-                    status={effectiveStatus}
-                    line={explainError(stderr, execution?.status, activeLanguage ?? execution?.language?.slug)?.line}
-                    onGoToLine={onGoToLine}
-                  />
-                  <ErrorDetails
-                    execution={execution}
-                    activeLanguage={activeLanguage}
-                    fileContent={fileContent}
-                    onGoToLine={onGoToLine}
-                    onApplyFix={onApplyFix}
-                    onFocusConsole={onFocusConsole}
-                  />
-                </div>
+              <div className="min-w-0 max-w-full">
+                <BilingualErrorTitle
+                  status={effectiveStatus}
+                  line={explainError(stderr, execution?.status, activeLanguage ?? execution?.language?.slug)?.line}
+                  onGoToLine={onGoToLine}
+                />
+                <ErrorDetails
+                  execution={execution}
+                  activeLanguage={activeLanguage}
+                  fileContent={fileContent}
+                  onGoToLine={onGoToLine}
+                  onApplyFix={onApplyFix}
+                  onFocusConsole={onFocusConsole}
+                />
               </div>
             )}
           </div>
@@ -748,8 +833,8 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
           liveActive ? (
             liveFrame
           ) : (
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="min-h-0 flex-1 overflow-auto bg-editor px-4 py-3 font-mono text-[15px] leading-relaxed scrollbar-thin lg:py-3 lg:text-[13px]">
+            <div className="flex h-full min-h-0 max-w-full min-w-0 flex-col">
+              <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-auto bg-editor px-3 py-3 pb-[calc(5rem+env(safe-area-inset-bottom))] font-mono text-[15px] leading-relaxed scrollbar-thin sm:px-4 lg:py-3 lg:pb-3 lg:text-[13px]">
                 {isRunning && (
                   <div className="flex items-center gap-2 text-info">
                     <span className="h-3 w-3 animate-spin rounded-full border-2 border-info border-t-transparent" />
@@ -758,7 +843,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
                 )}
 
                 {stdout && (
-                  <pre className="whitespace-pre-wrap text-ink">{stdout}</pre>
+                  <pre className="whitespace-pre-wrap wrap-anywhere text-ink">{stdout}</pre>
                 )}
                 {execution?.truncated && (
                   <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] leading-snug text-mute">

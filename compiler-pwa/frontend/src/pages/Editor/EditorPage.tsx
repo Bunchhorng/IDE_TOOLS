@@ -134,6 +134,13 @@ export default function EditorPage() {
     dirtyRef.current = dirty;
   }, [dirty]);
 
+  /** A run just finished — reveal the result. On mobile the terminal panel
+   *  starts collapsed, so expand it or a compile error would be invisible. */
+  useEffect(() => {
+    if (execution && panel.collapsed) panel.toggle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [execution]);
+
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!dirtyRef.current) return;
@@ -1149,7 +1156,7 @@ export default function EditorPage() {
         )}
 
          {mobileTab === 'output' && (
-           <main className="flex min-h-0 flex-1 flex-col pt-px lg:hidden">
+           <main className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col pt-px lg:hidden">
              <TerminalPanel
                ref={terminalPanelRef}
                execution={execution}

@@ -251,21 +251,21 @@ export default function History() {
                       </div>
                     )}
                     <div className="grid gap-3 md:grid-cols-2">
-                      <div>
+                      <div className="min-w-0">
                         <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-success">
                           <Icon name="terminal" size={12} />
                           {t('history.output_label')}
                         </p>
-                        <pre className="max-h-52 overflow-auto rounded-lg border border-edge bg-editor p-3 font-mono text-[12px] leading-relaxed text-ink">
+                        <pre className="max-h-52 overflow-auto whitespace-pre-wrap wrap-anywhere rounded-lg border border-edge bg-editor p-3 font-mono text-[12px] leading-relaxed text-ink">
                           {e.stdout || <span className="text-faint">—</span>}
                         </pre>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-error">
                           <Icon name="alertTriangle" size={12} />
                           {t('history.errors_label')}
                         </p>
-                        <pre className="max-h-52 overflow-auto rounded-lg border border-error/30 bg-editor p-3 font-mono text-[12px] leading-relaxed text-error/90">
+                        <pre className="max-h-52 overflow-auto whitespace-pre-wrap wrap-anywhere rounded-lg border border-error/30 bg-editor p-3 font-mono text-[12px] leading-relaxed text-error/90">
                           {e.stderr || <span className="text-faint">—</span>}
                         </pre>
                       </div>

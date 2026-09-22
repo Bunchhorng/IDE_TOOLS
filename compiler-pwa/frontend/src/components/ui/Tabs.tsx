@@ -23,7 +23,7 @@ export function Tabs<V extends string>({
     <div
       role="tablist"
       className={cn(
-        'no-scrollbar flex min-w-0 items-center gap-0.5 overflow-x-auto border-b border-edge px-2 py-1.5',
+        'no-scrollbar flex min-w-0 w-full items-center gap-0.5 overflow-x-auto border-b border-edge px-1.5 py-1.5 sm:px-2',
         className,
       )}
     >
@@ -36,7 +36,7 @@ export function Tabs<V extends string>({
             aria-selected={active}
             onClick={() => onChange(tab.value)}
             className={cn(
-              'relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors',
+              'relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-2 text-[12px] font-medium transition-colors sm:px-3 sm:py-1.5 sm:text-[13px]',
               active ? 'bg-primary/10 text-primary' : 'text-mute hover:bg-raised hover:text-ink',
             )}
           >
