@@ -63,7 +63,7 @@ export default function Register() {
     setFormError('');
     const next: FieldErrors = {};
     if (name.trim().length < 2) next.name = t('register.name_short');
-    if (!/^[^\s@]+@etec\.com$/i.test(email.trim())) next.email = t('register.email_domain');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(email.trim())) next.email = t('register.email_invalid');
     if (password.length < 8) next.password = t('register.password_short');
     if (confirm !== password) next.confirm = t('register.passwords_no_match');
     setErrors(next);
