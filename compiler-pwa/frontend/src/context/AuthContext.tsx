@@ -28,6 +28,38 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// Guest provisioning is the gate for every authenticated call, so a single
+// throttled or flaky response would leave the app tokenless and make code
+// execution fail with an opaque "system error". Retry transient failures
+// (offline, 429, 5xx) with backoff before giving up.
+function isTransientAuthError(err: unknown): boolean {
+  if (isNetworkError(err)) return true;
+  const status = (err as { response?: { status?: number } })?.response?.status;
+  return status === 429 || (status !== undefined && status >= 500);
+}
+
+const GUEST_RETRY_DELAYS = [400, 1200, 2500];
+
+async function provisionGuestSession(
+  applyUser: (user: User) => void,
+): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= GUEST_RETRY_DELAYS.length; attempt += 1) {
+    try {
+      const response = await authService.guest();
+      authService.setToken(response.data.token);
+      applyUser(response.data.user);
+      setIdentity(response.data.user);
+      return;
+    } catch (err) {
+      lastError = err;
+      if (!isTransientAuthError(err) || attempt === GUEST_RETRY_DELAYS.length) break;
+      await new Promise((resolve) => setTimeout(resolve, GUEST_RETRY_DELAYS[attempt]));
+    }
+  }
+  throw lastError;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,10 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const ensureGuestSession = useCallback(async () => {
     try {
-      const response = await authService.guest();
-      authService.setToken(response.data.token);
-      setUser(response.data.user);
-      setIdentity(response.data.user);
+      await provisionGuestSession(setUser);
     } catch (err) {
       if (isNetworkError(err) && restoreCachedIdentity()) {
         /* offline boot from the cached identity */

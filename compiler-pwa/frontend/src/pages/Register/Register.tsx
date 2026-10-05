@@ -7,6 +7,7 @@ import { Logo } from '../../components/Logo';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
+import { resolveApiErrorMessage } from '../../lib/offline/sync';
 
 interface FieldErrors {
   name?: string;
@@ -16,12 +17,7 @@ interface FieldErrors {
 }
 
 function extractErrors(err: unknown, fallback: string): string {
-  const data = (err as { response?: { status?: number; data?: { message?: string; errors?: Record<string, string[]> } } })?.response?.data;
-  if (data?.errors) {
-    const first = Object.values(data.errors).flat()[0];
-    if (first) return first;
-  }
-  return data?.message ?? fallback;
+  return resolveApiErrorMessage(err, fallback);
 }
 
 /** 0-4 password strength score: length + variety. */

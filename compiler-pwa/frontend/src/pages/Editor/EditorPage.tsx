@@ -33,6 +33,7 @@ import { setSuppress401Reload } from '../../services/api';
 import { executionService } from '../../services/executionService';
 import { languageService } from '../../services/languageService';
 import { offlineService } from '../../lib/offline/service';
+import { resolveApiErrorMessage } from '../../lib/offline/sync';
 import { runPython, preparePython, pythonReady } from '../../lib/offline/python';
 import { useOfflineSync } from '../../context/OfflineSyncContext';
 import type { Project, File, Folder, Language, Execution, ExecutionStatus } from '../../types';
@@ -474,7 +475,7 @@ export default function EditorPage() {
           }
           isRunningRef.current = false;
           setIsRunning(false);
-        } catch {
+        } catch (err) {
           if (token !== sessionTokenRef.current || !isRunningRef.current) return;
           setExecution({
             id: id,
@@ -489,7 +490,10 @@ export default function EditorPage() {
                 ? inputLinesRef.current.join('\n')
                 : null,
             stdout: '',
-            stderr: t('toast.couldnt_run'),
+            // The sandbox never reported this failure — the run request itself
+            // did not complete. Showing a runtime hint here would send users
+            // hunting a sandbox problem they do not have.
+            stderr: resolveApiErrorMessage(err, t('toast.couldnt_run')),
             exit_code: null,
             execution_time: null,
             memory_usage: null,
@@ -667,9 +671,7 @@ export default function EditorPage() {
       } else {
         // No execution record (network/queue failure) — surface it in the
         // terminal instead of a popup alert.
-        const message =
-          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-          t('toast.couldnt_run');
+        const message = resolveApiErrorMessage(err, t('toast.couldnt_run'));
         setExecution({
           id: 0,
           user_id: project?.user_id ?? 0,

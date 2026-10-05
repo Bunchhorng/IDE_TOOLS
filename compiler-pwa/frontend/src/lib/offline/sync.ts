@@ -15,6 +15,39 @@ export function isNetworkError(err: unknown): boolean {
   return !e.response;
 }
 
+/**
+ * Pick the message to show for a failed request.
+ *
+ * A request that never reached the server (offline radio, DNS failure,
+ * blocked request, CORS rejection) carries no response, so falling back to a
+ * domain-specific string such as "invalid credentials" actively misleads —
+ * it blames the user's password for what is a connectivity fault. Prefer the
+ * server's own message when there is one, and only then report the failure
+ * honestly.
+ */
+export function resolveApiErrorMessage(err: unknown, fallback: string): string {
+  const e = err as {
+    response?: { status?: number; data?: { message?: unknown; errors?: Record<string, string[]> } };
+    message?: string;
+  };
+  if (isNetworkError(err)) return OFFLINE_MESSAGE;
+  const serverMessage = e.response?.data?.message;
+  if (typeof serverMessage === 'string' && serverMessage) return serverMessage;
+  const fieldError = e.response?.data?.errors
+    ? Object.values(e.response.data.errors).flat()[0]
+    : undefined;
+  if (typeof fieldError === 'string' && fieldError) return fieldError;
+  if (e.response?.status === 429) return RATE_LIMIT_MESSAGE;
+  if (typeof e.message === 'string' && e.message) return e.message;
+  return fallback;
+}
+
+export const OFFLINE_MESSAGE =
+  'Cannot reach the server. Check your internet connection and try again.';
+
+export const RATE_LIMIT_MESSAGE =
+  'Too many attempts. Please wait a moment and try again.';
+
 export function toApiPatch(p: { name?: string; description?: string | null }): { name?: string; description?: string } {
   const out: { name?: string; description?: string } = {};
   if (p.name !== undefined) out.name = p.name;

@@ -7,6 +7,7 @@ import { Logo } from '../../components/Logo';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
+import { resolveApiErrorMessage } from '../../lib/offline/sync';
 
 export default function Login() {
   const { login } = useAuth();
@@ -37,8 +38,7 @@ export default function Login() {
       toast.success(t('toast.welcome_back'));
       navigate('/dashboard');
     } catch (err: unknown) {
-      const msg = (err as { response?: { status?: number; data?: { message?: string } } })?.response?.data?.message;
-      setFormError(typeof msg === 'string' && msg ? msg : t('login.invalid_credentials'));
+      setFormError(resolveApiErrorMessage(err, t('login.invalid_credentials')));
     } finally {
       setSubmitting(false);
     }
