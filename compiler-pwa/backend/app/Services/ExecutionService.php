@@ -99,11 +99,13 @@ class ExecutionService
         } catch (\Throwable $e) {
             $execution->update([
                 'status' => Execution::STATUS_SYSTEM_ERROR,
-                'stderr' => 'Internal execution error',
+                'stderr' => 'Internal execution error: ' . $e->getMessage(),
             ]);
             Log::error('Execution failed', [
                 'execution_id' => $execution->id,
                 'error' => $e->getMessage(),
+                'exception' => get_class($e),
+                'trace' => $e->getTraceAsString(),
             ]);
         }
 
